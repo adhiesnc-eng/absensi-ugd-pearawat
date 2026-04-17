@@ -615,14 +615,31 @@
         
         let schH = '<table class="schedule-table"><tbody>';
         ['Pagi','Siang','Malam'].forEach(sName => {
-            const assigned = db.officers.filter(n => db.schedule[n] && db.schedule[n][now.getDate()] === sName[0]);
+            let targetDate = now.getDate();
+            
+            // Logika Jadwal Kerja Hari Ini khusus Shift Malam: 
+            // Jika saat ini jam menunjukkan kita masih di rentang shift malam yang dimulai KEMARIN 
+            // (sebelum jam ganti ke Pagi), maka ambil petugas dari tanggal kemarin.
+            if (sName === 'Malam') {
+                const shPagi = db.config.shiftHours.Pagi;
+                const parse = (t) => { const p = t.split(':'); return parseInt(p[0])*60 + parseInt(p[1]); };
+                const currentTimeMinutes = now.getHours() * 60 + now.getMinutes();
+                
+                // Jika waktu sekarang masih sebelum shift Pagi dimulai, berarti kita di bagian akhir shift Malam kemarin
+                if (currentTimeMinutes < parse(shPagi.start)) {
+                    let dYesterday = new Date();
+                    dYesterday.setDate(now.getDate() - 1);
+                    targetDate = dYesterday.getDate();
+                }
+            }
+
+            const assigned = db.officers.filter(n => db.schedule[n] && db.schedule[n][targetDate] === sName[0]);
             const isCur = sName.toLowerCase() === sh.l.toLowerCase();
             schH += `<tr><td class="${isCur ? 'current-shift-card' : ''}"><div class="font-black text-slate-700 text-xs">${sName}</div></td><td class="${isCur ? 'current-shift-card' : ''}">${assigned.length ? assigned.map(o => `<span class="staff-pill ${isCur ? 'staff-pill-active' : ''}">${o}</span>`).join('') : '<span class="text-slate-300 italic text-[10px]">Kosong</span>'}</td></tr>`;
         });
         safeSetHTML('planned-schedule-list', schH + '</tbody></table>');
 
-        // LOGIKA KHUSUS STATUS KEHADIRAN (LIVE)
-        // Jika Shift Malam, cari log dari hari ini atau kemarin (karena shift malam menyeberang hari)
+        // LOGIKA STATUS KEHADIRAN (LIVE)
         let actLogs;
         if (sh.l === 'Malam') {
             const yd = new Date(); yd.setDate(yd.getDate() - 1);
