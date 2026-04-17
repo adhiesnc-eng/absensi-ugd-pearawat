@@ -498,24 +498,8 @@
     function safeSetChecked(id, val) { const el = document.getElementById(id); if(el) el.checked = !!val; }
     function showLoading(s) { var l = document.getElementById('loading'); if(l) s ? l.classList.remove('hidden') : l.classList.add('hidden'); }
     
-    /**
-     * Fungsi fetch yang disempurnakan untuk menangani masalah redirect GAS dan CORS.
-     * Menggunakan text/plain untuk body POST guna menghindari OPTIONS preflight.
-     */
     async function fetchWithRetry(url, options = {}, retries = 5, backoff = 1000) {
-        const fetchOptions = {
-            ...options,
-            mode: 'cors',
-            redirect: 'follow',
-            cache: 'no-cache'
-        };
-
-        // GAS Hack: Jika ada body (POST), set content-type ke text/plain untuk menghindari preflight CORS
-        if (fetchOptions.body && fetchOptions.method === 'POST') {
-            // Kita tidak menyetel header Content-Type secara eksplisit agar tetap menjadi 'simple request'
-            // atau kita set ke text/plain jika diperlukan.
-        }
-
+        const fetchOptions = { ...options, mode: 'cors', redirect: 'follow', cache: 'no-cache' };
         try {
             const response = await fetch(url, fetchOptions);
             if (!response.ok) throw new Error(`HTTP Error: ${response.status}`);
@@ -637,8 +621,18 @@
         });
         safeSetHTML('planned-schedule-list', schH + '</tbody></table>');
 
-        const actLogs = db.logs.filter(l => l.date === today && l.shift.toLowerCase() === sh.l.toLowerCase());
-        safeSetHTML('current-duty-list', actLogs.length ? actLogs.map(l => `<div class="bg-white p-3 rounded-2xl flex items-center gap-3 border border-emerald-100"><div class="w-8 h-8 rounded-lg bg-emerald-500 text-white flex items-center justify-center font-black text-xs">${l.name[0]}</div><div><p class="text-[10px] font-black uppercase text-slate-700">${l.name}</p><p class="text-[7px] font-bold text-emerald-500 uppercase">${l.time}</p></div></div>`).join('') : '<p class="text-center py-4 text-[10px] font-bold text-slate-300 uppercase">Belum ada absen masuk</p>');
+        // LOGIKA KHUSUS STATUS KEHADIRAN (LIVE)
+        // Jika Shift Malam, cari log dari hari ini atau kemarin (karena shift malam menyeberang hari)
+        let actLogs;
+        if (sh.l === 'Malam') {
+            const yd = new Date(); yd.setDate(yd.getDate() - 1);
+            const yesterday = ("0"+yd.getDate()).slice(-2)+"/"+("0"+(yd.getMonth()+1)).slice(-2)+"/"+yd.getFullYear();
+            actLogs = db.logs.filter(l => (l.date === today || l.date === yesterday) && l.shift === 'Malam');
+        } else {
+            actLogs = db.logs.filter(l => l.date === today && l.shift === sh.l);
+        }
+
+        safeSetHTML('current-duty-list', actLogs.length ? actLogs.map(l => `<div class="bg-white p-3 rounded-2xl flex items-center gap-3 border border-emerald-100"><div class="w-8 h-8 rounded-lg bg-emerald-500 text-white flex items-center justify-center font-black text-xs">${l.name[0]}</div><div><p class="text-[10px] font-black uppercase text-slate-700">${l.name}</p><p class="text-[7px] font-bold text-emerald-500 uppercase">SHIFT ${l.shift.toUpperCase()} • SEDANG JAGA</p></div></div>`).join('') : '<p class="text-center py-4 text-[10px] font-bold text-slate-300 uppercase">Belum ada absen masuk</p>');
         
         const dailyLogs = db.logs.filter(l => l.date === today);
         safeSetHTML('daily-log-list', dailyLogs.length ? dailyLogs.slice(0,10).map(l => `<div class="bg-white p-3 rounded-2xl flex items-center justify-between border border-slate-100"><div class="flex items-center gap-3"><div class="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-xs text-slate-400 font-bold">${l.name[0]}</div><div><p class="text-[10px] font-black uppercase text-slate-700">${l.name}</p><p class="text-[7px] font-bold text-slate-400 uppercase">${l.shift} • ${l.time}</p></div></div><div class="text-[8px] font-black text-emerald-500 bg-emerald-50 px-2 py-1 rounded-lg">OK</div></div>`).join('') : '<p class="text-center py-4 text-[10px] font-bold text-slate-300">Belum ada scan</p>');
@@ -743,7 +737,6 @@
     window.loadData = async function(mode) {
         if(mode !== 'background') showLoading(true);
         try {
-            // Menggunakan fetchWithRetry yang diperkuat
             const r = await fetchWithRetry(WEB_APP_URL + "?action=getData", { method: "GET" });
             const d = await r.json();
             db.officers = d.officers || []; db.logs = d.logs || []; db.schedule = d.schedule || {}; if(d.config) db.config = Object.assign(db.config, d.config);
@@ -761,8 +754,7 @@
             if(db.isSettingsAuth) window.fillConfigInputs();
         } catch(e) { 
             console.error("Kesalahan pengambilan data:", e);
-            // Jika benar-benar gagal, gunakan data lokal dari localStorage sebagai cadangan jika ada
-            showModernNotify('error', 'Koneksi Terhambat', 'Gagal memuat data dari server. Pastikan skrip Google Apps Script Anda dipublikasikan dengan benar.');
+            showModernNotify('error', 'Koneksi Terhambat', 'Gagal memuat data dari server.');
         } finally { showLoading(false); }
     };
 
@@ -784,8 +776,6 @@
 
     async function postToCloud(action, payload) {
         try { 
-            // Untuk POST ke GAS, gunakan body JSON string dalam request ber-metode POST
-            // Kita bungkus fetch ke dalam fetchWithRetry
             const r = await fetchWithRetry(WEB_APP_URL, { 
                 method: "POST", 
                 body: JSON.stringify({ action, payload })
