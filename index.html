@@ -81,6 +81,12 @@
             border-right: 2px solid #f1f5f9 !important; font-weight: 700; color: #1e293b;
         }
 
+        /* KOLOM STICKY KANAN UNTUK TOTAL */
+        .sticky-col-right {
+            position: sticky; right: 0; background: white !important; z-index: 10;
+            border-left: 2px solid #f1f5f9 !important;
+        }
+
         .cell-P { background-color: var(--primary-light) !important; color: var(--primary) !important; }
         .cell-S { background-color: #fffbeb !important; color: #d97706 !important; }
         .cell-M { background-color: #eff6ff !important; color: #2563eb !important; }
@@ -611,7 +617,8 @@
         const now = new Date(), yr = now.getFullYear(), mo = now.getMonth(), days = new Date(yr, mo+1, 0).getDate();
         let h = `<table class="editor-table"><thead><tr><th class="sticky-col">PERAWAT</th>`;
         for(let d=1; d<=days; d++) h += `<th class="${new Date(yr, mo, d).getDay() === 0 ? 'text-sunday' : ''}">${d}</th>`;
-        h += `<th class="text-white" style="background-color: var(--primary)">TOT</th></tr></thead><tbody>`;
+        // TERAPKAN STICKY COL RIGHT PADA HEADER
+        h += `<th class="sticky-col-right text-white" style="background-color: var(--primary) !important;">TOT</th></tr></thead><tbody>`;
         db.officers.forEach(name => {
             const key = name.trim().toUpperCase(), att = db.attendance[key] || {};
             h += `<tr><td class="sticky-col uppercase font-black text-xs">${name}</td>`;
@@ -619,7 +626,8 @@
                 const val = att[d] || '', click = db.isSettingsAuth ? `onclick="window.editRekapCell('${name}', ${d})"` : '';
                 h += `<td class="cell-${val} font-bold rekap-cell-editable" ${click}>${val}</td>`;
             }
-            h += `<td class="font-black" style="color: var(--primary)">${Object.keys(att).length}</td></tr>`;
+            // TERAPKAN STICKY COL RIGHT PADA ISI SEL
+            h += `<td class="sticky-col-right font-black" style="color: var(--primary); background-color: white !important;">${Object.keys(att).length}</td></tr>`;
         });
         safeSetHTML('rekap-table-container', h + `</tbody></table>`);
     };
