@@ -745,14 +745,10 @@
             if(!h5q) h5q = new Html5Qrcode("reader");
             await h5q.start({ facingMode: "environment" }, { fps: 15, qrbox: 250 }, async (txt) => {
                 if(txt === db.config.qrData) {
-                    anim.style.display = 'flex';
-                    if (db.config.voice && 'speechSynthesis' in window) { window.speechSynthesis.speak(new SpeechSynthesisUtterance("Berhasil")); }
-                    
-                    // LOGIKA TANGGAL PRESENSI KHUSUS SHIFT MALAM
+                    // LOGIKA TANGGAL PRESENSI DAN VALIDASI DUPLIKAT
                     let shiftInfo = getShiftData();
                     let targetDate = new Date();
                     
-                    // Jika sekarang jam shift Malam dan waktu sudah masuk dini hari (sebelum Pagi mulai)
                     if (shiftInfo.l === 'Malam') {
                         const now = new Date();
                         const currentTimeMinutes = now.getHours() * 60 + now.getMinutes();
@@ -760,12 +756,29 @@
                         const pagiStartMinutes = parseInt(pagiStart[0]) * 60 + parseInt(pagiStart[1]);
 
                         if (currentTimeMinutes < pagiStartMinutes) {
-                            // Pindahkan tanggal ke hari kemarin agar masuk ke jadwal yang benar
                             targetDate.setDate(targetDate.getDate() - 1);
                         }
                     }
                     
                     const presensiDateStr = ("0"+targetDate.getDate()).slice(-2)+"/"+("0"+(targetDate.getMonth()+1)).slice(-2)+"/"+targetDate.getFullYear();
+
+                    // VALIDASI: CEK APAKAH SUDAH SCAN DI SHIFT INI
+                    const isAlreadyScanned = db.logs.some(log => 
+                        log.name === db.activeUser && 
+                        log.date === presensiDateStr && 
+                        log.shift === shiftInfo.l
+                    );
+
+                    if (isAlreadyScanned) {
+                        await h5q.stop();
+                        modal.style.display = 'none';
+                        showModernNotify('error', 'Gagal', 'Anda sudah melakukan presensi di shift ini.');
+                        return;
+                    }
+
+                    // Jika belum absen, lanjutkan proses
+                    anim.style.display = 'flex';
+                    if (db.config.voice && 'speechSynthesis' in window) { window.speechSynthesis.speak(new SpeechSynthesisUtterance("Berhasil")); }
 
                     setTimeout(async () => {
                         await h5q.stop(); modal.style.display = 'none';
