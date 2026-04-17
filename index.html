@@ -224,6 +224,14 @@
             z-index: 150; transition: 0.3s; color: #64748b;
         }
         .fab-reload:active { transform: scale(0.9) rotate(45deg); }
+
+        /* CHAT STYLE UPDATES */
+        .chat-options-btn {
+            opacity: 0; transition: 0.2s;
+        }
+        .chat-bubble-wrapper:hover .chat-options-btn {
+            opacity: 1;
+        }
     </style>
 </head>
 <body class="nav-layout-grid" id="body-main">
@@ -518,6 +526,18 @@
     </div>
 </div>
 
+<!-- MODAL EDIT CHAT -->
+<div id="modal-edit-chat" class="modal-overlay" onclick="if(event.target === this) window.closeEditChatModal()">
+    <div class="modal-card">
+        <h3 class="font-extrabold text-slate-800 text-lg mb-4 tracking-tight">✏️ Edit Pesan</h3>
+        <textarea id="edit-chat-input" class="w-full bg-slate-50 border-2 border-slate-100 p-4 rounded-2xl text-xs font-bold h-24 outline-none focus:border-teal-600 mb-4"></textarea>
+        <div class="flex gap-3">
+            <button onclick="window.closeEditChatModal()" class="flex-1 bg-slate-100 text-slate-500 font-bold py-4 rounded-2xl text-xs">Batal</button>
+            <button onclick="window.saveEditChat()" class="flex-1 bg-teal-600 text-white font-bold py-4 rounded-2xl text-xs" style="background-color: var(--primary)">Simpan</button>
+        </div>
+    </div>
+</div>
+
 <div id="modal-patient" class="modal-overlay" onclick="if(event.target === this) window.closePatientModal()">
     <div class="modal-card">
         <h3 class="font-extrabold text-slate-800 text-lg mb-6 tracking-tight">🩺 Laporan Pasien</h3>
@@ -537,6 +557,7 @@
         isSettingsAuth: localStorage.getItem('is_admin_auth') === 'true',
         isChatAuth: localStorage.getItem('is_chat_auth') === 'true',
         officers: [], logs: [], schedule: {}, attendance: {}, holidays: [],
+        chat: [], 
         config: { adminPin: "1111", chatPin: "ugd", qrData: "SISTEM-PRO-01", themeColor: '#0d9488', navLayout: 'grid', voice: true, shiftHours: { Pagi: { start: "08:00", end: "14:00" }, Siang: { start: "14:00", end: "20:00" }, Malam: { start: "20:00", end: "08:00" } }, rates: { biasa: 0, besar: 0 } }
     };
     let h5q = null;
@@ -547,7 +568,6 @@
     function safeSetValue(id, val) { const el = document.getElementById(id); if(el) el.value = val; }
     function safeSetChecked(id, val) { const el = document.getElementById(id); if(el) el.checked = !!val; }
     
-    // showLoading versi baru: melayang di atas, tidak memblokir UI
     function showLoading(s) { 
         var l = document.getElementById('loading'); 
         if(l) s ? l.classList.remove('hidden') : l.classList.add('hidden'); 
@@ -662,6 +682,50 @@
         }).join('');
     };
 
+    window.renderChat = function() {
+        const container = document.getElementById('chat-container');
+        if (!container) return;
+        
+        if (!db.chat || db.chat.length === 0) {
+            container.innerHTML = '<p class="text-center text-slate-400 text-[10px] mt-10 uppercase font-bold">Belum ada percakapan</p>';
+            return;
+        }
+
+        container.innerHTML = db.chat.map(m => {
+            const isMe = m.name === db.activeUser;
+            const isReport = m.message.includes('📋 LAPORAN:');
+            const status = m.status || 'sent'; // default sent
+            
+            // Centang UI
+            let checkmark = '';
+            if(isMe) {
+                if(status === 'sending') checkmark = '<span class="ml-1 text-[10px] opacity-70">✓</span>';
+                else checkmark = '<span class="ml-1 text-[10px] opacity-90">✓✓</span>';
+            }
+
+            return `
+                <div class="flex ${isMe ? 'justify-end' : 'justify-start'} mb-4 chat-bubble-wrapper group relative">
+                    <div class="max-w-[85%] ${isMe ? 'bg-teal-600 text-white rounded-l-2xl rounded-tr-2xl' : 'bg-white text-slate-800 rounded-r-2xl rounded-tl-2xl'} p-3 shadow-sm border ${isMe ? 'border-teal-700' : 'border-slate-100'} relative">
+                        ${!isMe ? `<p class="text-[9px] font-black uppercase mb-1 ${isMe ? 'text-teal-200' : 'text-teal-600'}">${m.name}</p>` : ''}
+                        <div class="text-[11px] font-medium leading-relaxed whitespace-pre-wrap ${isReport ? 'bg-slate-50/10 p-2 rounded-lg border border-white/10' : ''}">${m.message}</div>
+                        <div class="flex items-center justify-end mt-1 gap-1">
+                            <p class="text-[8px] opacity-60 font-bold uppercase tracking-tighter">${m.time}</p>
+                            ${checkmark}
+                        </div>
+                    </div>
+                    ${isMe && status !== 'sending' ? `
+                        <div class="absolute -top-2 ${isMe ? '-left-8' : '-right-8'} flex flex-col gap-1 chat-options-btn">
+                            <button onclick="window.openEditChat('${m.msgId}', \`${m.message.replace(/`/g, '\\`').replace(/'/g, "\\'")}\`)" class="w-6 h-6 bg-white border border-slate-200 rounded-full text-[10px] shadow-sm flex items-center justify-center">✏️</button>
+                            <button onclick="window.deleteChat('${m.msgId}')" class="w-6 h-6 bg-rose-50 border border-rose-200 rounded-full text-[10px] shadow-sm flex items-center justify-center">🗑️</button>
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+        }).join('');
+        
+        setTimeout(() => { container.scrollTop = container.scrollHeight; }, 100);
+    };
+
     window.render = function() {
         const sh = getShiftData(), today = getTodayStr(), now = new Date();
         safeSetText('clock', now.toLocaleTimeString('id-ID', { hour:'2-digit', minute:'2-digit' }));
@@ -711,7 +775,7 @@
         if(db.config.navLayout === 'row') { body.classList.remove('nav-layout-grid'); body.classList.add('nav-layout-row'); } 
         else { body.classList.remove('nav-layout-row'); body.classList.add('nav-layout-grid'); }
 
-        window.renderRekap(); window.renderArchive(); window.renderScheduleEditor(); window.syncUI();
+        window.renderRekap(); window.renderArchive(); window.renderScheduleEditor(); window.renderChat(); window.syncUI();
     };
 
     // --- ACTIONS ---
@@ -732,7 +796,7 @@
     };
     window.logoutChat = () => { db.isChatAuth=false; localStorage.removeItem('is_chat_auth'); window.render(); };
 
-    window.showView = function(v) { document.querySelectorAll('.view-content').forEach(el => el.classList.remove('active')); document.getElementById('view-'+v).classList.add('active'); document.querySelectorAll('.nav-card-item').forEach(el => el.classList.remove('active')); document.getElementById('nav-'+v)?.classList.add('active'); if(v === 'rekap') window.loadData('background'); };
+    window.showView = function(v) { document.querySelectorAll('.view-content').forEach(el => el.classList.remove('active')); document.getElementById('view-'+v).classList.add('active'); document.querySelectorAll('.nav-card-item').forEach(el => el.classList.remove('active')); document.getElementById('nav-'+v)?.classList.add('active'); if(v === 'rekap' || v === 'chat') window.loadData('background'); };
     window.togglePanel = (id) => { document.getElementById(id).classList.toggle('open'); };
     window.togglePlannedSchedule = () => { document.getElementById('planned-schedule-container').classList.toggle('open'); };
     window.updateLocalSch = (n, d, v, cell) => { if(!db.schedule[n]) db.schedule[n] = {}; db.schedule[n][d] = v; cell.className = v ? 'cell-'+v : ''; };
@@ -820,8 +884,74 @@
     window.selectEditStatus = async (s) => { const { name, day } = db.activeEditCell; const date = `${("0"+day).slice(-2)}/${("0"+(new Date().getMonth()+1)).slice(-2)}/${new Date().getFullYear()}`; document.getElementById('modal-edit-rekap').style.display = 'none'; await postToCloud('saveScan', { name: name, date: date, shift: s || "Dihapus", time: "EDIT" }); };
     window.openPatientModal = () => { document.getElementById('modal-patient').style.display = 'flex'; };
     window.closePatientModal = () => { document.getElementById('modal-patient').style.display = 'none'; };
-    window.sendPatientStatus = () => { const n = document.getElementById('pst-nama').value; if(!n) return; postToCloud('saveChat', { name: db.activeUser, message: `📋 LAPORAN: ${n}\n${document.getElementById('pst-kondisi').value}`, time: new Date().toLocaleTimeString() }); closePatientModal(); showModernNotify('success', 'Terkirim', 'Laporan terkirim.'); };
-    window.sendMessage = () => { const i = document.getElementById('chat-input'); if (!i.value.trim()) return; postToCloud('saveChat', { name: db.activeUser, message: i.value.trim(), time: new Date().toLocaleTimeString() }); i.value = ''; };
+    
+    // CHAT LOGIC REFINED
+    window.sendPatientStatus = async () => { 
+        const n = document.getElementById('pst-nama').value; 
+        const c = document.getElementById('pst-kondisi').value;
+        if(!n) return; 
+        const msg = `📋 LAPORAN:\nNama: ${n}\nDiagnosa/Kondisi: ${c}`;
+        closePatientModal(); 
+        await window.sendMessageOptimistic(msg);
+        document.getElementById('pst-nama').value = '';
+        document.getElementById('pst-kondisi').value = '';
+    };
+    
+    window.sendMessage = async () => { 
+        const i = document.getElementById('chat-input'); 
+        if (!i.value.trim()) return; 
+        const msg = i.value.trim();
+        i.value = ''; 
+        await window.sendMessageOptimistic(msg);
+    };
+
+    // Optimistic Update: Centang satu langsung tampil
+    window.sendMessageOptimistic = async (msg) => {
+        const tempId = 'temp-' + Date.now();
+        const time = new Date().toLocaleTimeString('id-ID', {hour:'2-digit', minute:'2-digit'});
+        
+        // Pushing locally with 'sending' status
+        db.chat.push({ msgId: tempId, name: db.activeUser, message: msg, time: time, status: 'sending' });
+        window.renderChat();
+        
+        const success = await postToCloud('saveChat', { 
+            name: db.activeUser, 
+            message: msg, 
+            time: time 
+        });
+
+        if(success) {
+            // Success will trigger loadData in postToCloud, centang dua will appear via re-render
+        } else {
+            showModernNotify('error', 'Gagal', 'Pesan gagal terkirim.');
+            db.chat = db.chat.filter(m => m.msgId !== tempId);
+            window.renderChat();
+        }
+    }
+
+    // EDIT/DELETE CHAT
+    window.openEditChat = (id, msg) => {
+        db.activeEditChat = { id, msg };
+        document.getElementById('edit-chat-input').value = msg;
+        document.getElementById('modal-edit-chat').style.display = 'flex';
+    };
+    window.closeEditChatModal = () => { document.getElementById('modal-edit-chat').style.display = 'none'; };
+    window.saveEditChat = async () => {
+        const newMsg = document.getElementById('edit-chat-input').value;
+        if(!newMsg.trim()) return;
+        const id = db.activeEditChat.id;
+        window.closeEditChatModal();
+        showLoading(true);
+        await postToCloud('editChat', { msgId: id, message: newMsg });
+        showModernNotify('success', 'Berhasil', 'Pesan diperbarui.');
+    };
+    window.deleteChat = async (id) => {
+        if(confirm("Hapus pesan ini?")) {
+            showLoading(true);
+            await postToCloud('deleteChat', { msgId: id });
+            showModernNotify('success', 'Terhapus', 'Pesan telah dihapus.');
+        }
+    };
 
     window.exportToExcel = function() {
         const now = new Date(), yr = now.getFullYear(), mo = now.getMonth(), days = new Date(yr, mo+1, 0).getDate();
@@ -842,7 +972,12 @@
         try {
             const r = await fetchWithRetry(WEB_APP_URL + "?action=getData", { method: "GET" });
             const d = await r.json();
-            db.officers = d.officers || []; db.logs = d.logs || []; db.schedule = d.schedule || {}; if(d.config) db.config = Object.assign(db.config, d.config);
+            db.officers = d.officers || []; 
+            db.logs = d.logs || []; 
+            db.schedule = d.schedule || {}; 
+            db.chat = d.chat || []; 
+            if(d.config) db.config = Object.assign(db.config, d.config);
+            
             db.attendance = {};
             const now = new Date();
             db.logs.slice().reverse().forEach(l => {
