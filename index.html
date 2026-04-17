@@ -1,0 +1,810 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Sistem Presensi Perawat - Puskesmas Sampanahan</title>
+    
+    <!-- PWA Meta Tags -->
+    <meta name="theme-color" content="#0d9488" id="meta-theme-color">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Perawat Sampanahan">
+    
+    <link rel="manifest" href='data:application/json,{"name":"Sistem Presensi Perawat","short_name":"Presensi Perawat","start_url":".","display":"standalone","background_color":"#ffffff","theme_color":"#0d9488","orientation":"portrait","icons":[{"src":"https://cdn-icons-png.flaticon.com/512/3063/3063204.png","sizes":"512x512","type":"image/png","purpose":"any maskable"}]}'>
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/html5-qrcode"></script>
+    <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+    
+    <style id="dynamic-theme">
+        :root {
+            --primary: #0d9488;
+            --primary-light: #f0fdfa;
+            --accent: #f43f5e;
+            --bg: #f8fafc;
+        }
+    </style>
+
+    <style>
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        
+        html, body { 
+            height: auto !important; 
+            min-height: 100%;
+            margin: 0; padding: 0; 
+            overflow-x: hidden;
+            overflow-y: auto !important;
+            background-color: #f1f5f9;
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            scrollbar-width: none;
+            -webkit-overflow-scrolling: touch;
+        }
+        body::-webkit-scrollbar { display: none; }
+
+        .app-container { 
+            max-width: 500px; margin: 0 auto; background: white; 
+            min-height: 100vh;
+            position: relative; display: flex; flex-direction: column;
+            box-shadow: 0 0 40px rgba(0,0,0,0.1);
+        }
+
+        .scrollable-content {
+            flex: 1; overflow-y: auto; scrollbar-width: none;
+            padding-bottom: 260px; 
+        }
+        .scrollable-content::-webkit-scrollbar { display: none; }
+
+        .view-content { display: none; padding-bottom: 20px; height: 100%; }
+        .view-content.active { display: block; animation: fadeIn 0.3s ease-in; }
+        
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+        #connection-status {
+            font-size: 10px; font-weight: 800; text-align: center;
+            text-transform: uppercase; letter-spacing: 0.05em; transition: all 0.3s;
+            z-index: 100;
+        }
+        .status-online { background: #10b981; color: white; height: 0; opacity: 0; }
+        .status-offline { background: #ef4444; color: white; padding: 6px 0; opacity: 1; }
+
+        .rekap-wrapper { width: 100%; overflow-x: auto; border-radius: 16px; background: white; border: 1px solid #f1f5f9; }
+        .editor-table { border-collapse: collapse; min-width: 900px; font-size: 11px; }
+        .editor-table th, .editor-table td { border: 1px solid #f1f5f9; text-align: center; padding: 12px 6px; }
+        .editor-table th { background: #f8fafc; font-weight: 800; color: #64748b; text-transform: uppercase; font-size: 9px; }
+        
+        .sticky-col { 
+            position: sticky; left: 0; background: white !important; z-index: 10; 
+            min-width: 120px; text-align: left !important; padding-left: 14px !important; 
+            border-right: 2px solid #f1f5f9 !important; font-weight: 700; color: #1e293b;
+        }
+
+        .cell-P { background-color: var(--primary-light) !important; color: var(--primary) !important; }
+        .cell-S { background-color: #fffbeb !important; color: #d97706 !important; }
+        .cell-M { background-color: #eff6ff !important; color: #2563eb !important; }
+        .cell-L { background-color: #fff1f2 !important; color: #e11d48 !important; }
+        .cell-V { background-color: #f0fdf4 !important; color: #16a34a !important; }
+        .text-sunday { color: #f43f5e !important; }
+
+        .dashboard-nav {
+            position: fixed;
+            bottom: 0; left: 50%; transform: translateX(-50%);
+            width: 100%; max-width: 500px;
+            background: white; border-top: 1px solid #f1f5f9;
+            padding: 16px; padding-bottom: env(safe-area-inset-bottom, 16px);
+            display: flex; flex-direction: column;
+            gap: 12px; box-shadow: 0 -15px 40px rgba(0,0,0,0.06);
+            z-index: 100; border-radius: 35px 35px 0 0;
+        }
+
+        .nav-layout-grid .nav-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+        .nav-layout-grid .nav-card-item {
+            display: flex; align-items: center; gap: 10px; padding: 14px 12px;
+            background: #f8fafc; border-radius: 20px; color: #64748b; border: none;
+        }
+        .nav-layout-grid .nav-card-item.active { background: var(--primary-light) !important; border: 1px solid var(--primary) !important; color: var(--primary) !important; }
+
+        .nav-layout-row .nav-grid { display: flex; justify-content: space-around; gap: 4px; }
+        .nav-layout-row .nav-card-item {
+            flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px;
+            padding: 10px 4px; border-radius: 16px; background: transparent; color: #94a3b8; border: none;
+        }
+        .nav-layout-row .nav-card-item div { display: none; }
+
+        .modal-overlay { 
+            position: fixed; inset: 0; background: rgba(0,0,0,0.7); 
+            backdrop-filter: blur(5px); z-index: 1000; 
+            display: none; align-items: center; justify-content: center; 
+            padding: 20px;
+        }
+        .modal-card { 
+            background: white; width: 100%; max-width: 420px; 
+            border-radius: 32px; padding: 24px; 
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+            animation: modalPop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+            position: relative;
+            max-height: 90vh; overflow-y: auto;
+        }
+        @keyframes modalPop { from { opacity: 0; transform: scale(0.9); } to { opacity: 1; transform: scale(1); } }
+
+        #scan-success-anim {
+            position: absolute; inset: 0; background: white;
+            z-index: 1005; display: none; flex-direction: column; 
+            align-items: center; justify-content: center; border-radius: 32px;
+            animation: fadeIn 0.3s ease-out;
+        }
+        .success-checkmark { 
+            width: 80px; height: 80px; background: #10b981; border-radius: 50%; 
+            display: flex; align-items: center; justify-content: center; 
+            color: white; font-size: 40px; box-shadow: 0 0 30px rgba(16, 185, 129, 0.4); 
+            animation: checkPop 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275); 
+        }
+
+        .btn-scan-main {
+            width: 100%; height: 60px; background: var(--primary); color: white;
+            border-radius: 20px; display: flex; align-items: center; justify-content: center;
+            gap: 12px; font-weight: 800; font-size: 14px; text-transform: uppercase;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1); border: none; transition: 0.2s;
+        }
+
+        #modern-toast {
+            position: fixed; top: 20px; left: 50%; transform: translateX(-50%) translateY(-100px);
+            z-index: 9999; width: 90%; max-width: 400px; background: white;
+            padding: 16px 20px; border-radius: 24px; box-shadow: 0 15px 40px rgba(0,0,0,0.12);
+            display: flex; items-center; gap: 14px; transition: all 0.5s cubic-bezier(0.68, -0.55, 0.26, 1.55);
+            opacity: 0; pointer-events: none; border: 1px solid #f1f5f9;
+        }
+        #modern-toast.show { transform: translateX(-50%) translateY(0); opacity: 1; pointer-events: auto; }
+
+        .schedule-table { width: 100%; border-collapse: separate; border-spacing: 0 8px; }
+        .schedule-table td { padding: 16px 12px; border: 1px solid #f8fafc; border-radius: 16px; }
+        .current-shift-card { background: var(--primary-light) !important; border-color: var(--primary) !important; }
+        .staff-pill { display: inline-flex; align-items: center; background: #f1f5f9; color: #475569; padding: 4px 10px; border-radius: 10px; font-size: 10px; font-weight: 700; margin-right: 4px; margin-bottom: 4px; text-transform: uppercase; }
+        .staff-pill-active { background: var(--primary); color: white; }
+
+        .color-dot { width: 34px; height: 34px; border-radius: 12px; cursor: pointer; border: 3px solid white; box-shadow: 0 4px 10px rgba(0,0,0,0.1); transition: 0.2s; }
+        .color-dot.active { transform: scale(1.2); border-color: #334155; }
+
+        .setting-panel-content { max-height: 0; overflow: hidden; transition: max-height 0.4s ease; }
+        .setting-panel-content.open { max-height: 5000px; }
+        .chevron-icon { transition: transform 0.3s; font-size: 10px; }
+        .chevron-icon.rotate { transform: rotate(180deg); }
+
+        .switch { position: relative; display: inline-block; width: 40px; height: 22px; }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #cbd5e1; transition: .3s; border-radius: 34px; }
+        .slider:before { position: absolute; content: ""; height: 16px; width: 16px; left: 3px; bottom: 3px; background-color: white; transition: .3s; border-radius: 50%; }
+        input:checked + .slider { background-color: var(--primary); }
+        input:checked + .slider:before { transform: translateX(18px); }
+
+        .login-gradient { background: linear-gradient(135deg, var(--primary) 0%, #000 200%); }
+        .rekap-cell-editable { cursor: pointer; }
+        .rekap-cell-editable:hover { background-color: var(--primary-light) !important; }
+        
+        .chat-scroll { scrollbar-width: none; -ms-overflow-style: none; }
+        .chat-scroll::-webkit-scrollbar { display: none; }
+    </style>
+</head>
+<body class="nav-layout-grid" id="body-main">
+
+<div id="loading" class="hidden fixed inset-0 bg-white/80 backdrop-blur-sm z-[2000] flex flex-col items-center justify-center">
+    <div class="w-12 h-12 border-4 border-teal-600 border-t-transparent rounded-full animate-spin mb-4" style="border-top-color: var(--primary)"></div>
+    <p class="font-bold text-teal-700 text-xs uppercase tracking-widest text-center" style="color: var(--primary)">Memproses...</p>
+</div>
+
+<!-- NOTIFICATION TOAST -->
+<div id="modern-toast" class="toast-success flex items-center">
+    <div class="w-10 h-10 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center font-bold mr-3">✓</div>
+    <div class="flex-1">
+        <p id="toast-title" class="text-xs font-black uppercase text-slate-800 tracking-tight">Berhasil</p>
+        <p id="toast-body" class="text-[10px] font-bold text-slate-400">Data Anda telah diperbarui.</p>
+    </div>
+</div>
+
+<div class="app-container">
+    <div id="connection-status" class="status-online">Terhubung</div>
+
+    <div class="scrollable-content" id="main-scroll">
+        <!-- ================= HOME ================= -->
+        <div id="view-home" class="view-content active">
+            <div class="login-gradient p-6 pt-12 pb-14 rounded-b-[45px] text-white relative shadow-lg">
+                <div class="flex justify-between items-start">
+                    <div>
+                        <p class="text-[10px] font-bold opacity-70 uppercase tracking-widest">Puskesmas Sampanahan</p>
+                        <h2 id="user-display-name" class="text-xl font-extrabold truncate max-w-[200px]">Selamat Datang</h2>
+                    </div>
+                    <div class="text-right">
+                        <h1 id="clock" class="text-2xl font-black leading-none">00:00</h1>
+                        <p id="date-label" class="text-[10px] font-bold opacity-80 mt-1 uppercase">Memuat...</p>
+                    </div>
+                </div>
+                <div class="mt-8 flex items-center gap-3">
+                    <div class="bg-white/20 backdrop-blur-md px-4 py-2 rounded-2xl border border-white/10 flex items-center gap-2">
+                        <span id="shift-icon" class="text-lg">☀️</span>
+                        <span id="shift-label" class="text-[11px] font-black uppercase">Shift Pagi</span>
+                    </div>
+                    <button onclick="window.logout()" id="logout-btn" class="hidden bg-white/10 p-2.5 rounded-xl border border-white/10 transition-all">🚪</button>
+                </div>
+            </div>
+
+            <div class="px-5 -mt-6 space-y-6">
+                <div id="section-login" class="bg-white rounded-[32px] p-8 shadow-xl border border-slate-50 text-center">
+                    <div class="w-16 h-16 bg-teal-50 rounded-2xl flex items-center justify-center text-4xl mx-auto mb-4" style="background-color: var(--primary-light); color: var(--primary)">🧑‍⚕️</div>
+                    <h3 class="font-bold text-slate-800 text-sm mb-1 uppercase tracking-tight">Presensi Perawat</h3>
+                    <p class="text-slate-400 text-[10px] mb-6 font-medium">Pilih identitas Anda untuk masuk sesi.</p>
+                    <div class="space-y-4">
+                        <select id="select-onboarding" class="w-full bg-slate-50 border-2 border-slate-100 p-4 rounded-2xl text-sm font-bold outline-none appearance-none text-center">
+                            <option value="">Memuat data petugas...</option>
+                        </select>
+                        <button onclick="window.lockAccount()" class="w-full bg-teal-600 text-white font-extrabold py-5 rounded-2xl text-xs uppercase shadow-xl active:scale-95 transition-all" style="background-color: var(--primary)">🔒 Masuk Sesi Kerja</button>
+                    </div>
+                </div>
+
+                <div id="section-planned-schedule" class="hidden">
+                    <div class="bg-white rounded-[32px] shadow-lg border border-slate-50 overflow-hidden">
+                        <div onclick="window.togglePlannedSchedule()" class="p-5 flex justify-between items-center cursor-pointer hover:bg-slate-50 transition-all">
+                            <h3 class="font-extrabold text-slate-800 text-[11px] uppercase tracking-widest flex items-center gap-2">
+                                <span class="w-1 h-4 bg-teal-600 rounded-full" style="background-color: var(--primary)"></span> Jadwal Kerja Hari Ini
+                            </h3>
+                            <span id="icon-planned-schedule" class="chevron-icon text-slate-300">▼</span>
+                        </div>
+                        <div id="planned-schedule-container" class="setting-panel-content">
+                            <div class="px-5 pb-5">
+                                <div id="planned-schedule-list"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="section-actual-duty" class="hidden">
+                    <div class="bg-emerald-50/40 rounded-[32px] p-6 border border-emerald-100">
+                        <div class="flex justify-between items-center mb-5">
+                            <h3 id="duty-title-display" class="font-extrabold text-slate-700 text-[10px] uppercase tracking-widest">✅ Status Kehadiran</h3>
+                            <span class="bg-white text-emerald-500 text-[8px] font-black px-2 py-0.5 rounded-full shadow-sm border border-emerald-100">LIVE</span>
+                        </div>
+                        <div id="current-duty-list" class="space-y-3"></div>
+                    </div>
+                </div>
+
+                <div id="section-daily-log" class="hidden">
+                    <div class="bg-slate-50/50 rounded-[32px] p-6 border border-slate-200">
+                        <h3 class="font-extrabold text-slate-600 text-[10px] uppercase tracking-widest mb-4 text-center">Log Scan Hari Ini</h3>
+                        <div id="daily-log-list" class="space-y-2"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ================= REKAP ================= -->
+        <div id="view-rekap" class="view-content">
+            <div class="bg-teal-900 p-6 pt-12 pb-10 text-white flex justify-between items-end shadow-lg" id="rekap-header" style="background-color: var(--primary)">
+                <div>
+                    <h2 class="text-xl font-black uppercase italic tracking-tighter">Laporan</h2>
+                    <p class="text-[10px] font-bold opacity-60 uppercase tracking-widest" id="rekap-month-label">Bulan Ini</p>
+                </div>
+                <button onclick="window.exportToExcel()" class="bg-white/10 p-3 rounded-2xl border border-white/10 active:scale-90 transition-all">📥</button>
+            </div>
+            
+            <div class="p-4 space-y-6">
+                <div class="bg-white rounded-3xl shadow-xl border border-slate-100 overflow-hidden">
+                    <div class="p-4 bg-slate-50 border-b border-slate-100 flex justify-between items-center">
+                        <p class="text-[10px] font-black text-slate-500 uppercase">Data Absensi</p>
+                        <span class="text-[8px] bg-amber-100 text-amber-600 px-2 py-0.5 rounded-full font-bold uppercase tracking-tight">Admin: Klik sel untuk edit</span>
+                    </div>
+                    <div class="rekap-wrapper custom-scroll">
+                        <div id="rekap-table-container"></div>
+                    </div>
+                </div>
+                <div id="rekap-archive-list" class="space-y-3"></div>
+            </div>
+        </div>
+
+        <!-- ================= CHAT ================= -->
+        <div id="view-chat" class="view-content h-full">
+            <div id="chat-auth-container" class="p-10 flex flex-col items-center justify-center text-center h-full">
+                <div class="w-32 h-32 bg-teal-100 rounded-[50px] flex items-center justify-center text-6xl mb-6 shadow-inner border border-teal-200" style="background-color: var(--primary-light); color: var(--primary)">💬</div>
+                <h3 class="font-extrabold text-slate-800 text-lg mb-2 text-center uppercase tracking-tighter">Koordinasi</h3>
+                <p class="text-slate-400 text-xs font-medium px-4 mb-10 text-center">Masukkan PIN Khusus Perawat.</p>
+                <input type="password" id="chat-pin-input" class="w-full max-w-[240px] bg-slate-100 p-6 rounded-[30px] text-center text-4xl font-black border-2 border-transparent focus:border-teal-400 focus:bg-white outline-none transition-all" placeholder="••••">
+                <button onclick="window.verifyChatPin()" class="w-full max-w-[240px] mt-6 bg-teal-600 text-white font-black py-5 rounded-[30px] text-[10px] uppercase shadow-xl active:scale-95 transition-all" style="background-color: var(--primary)">Masuk Obrolan</button>
+            </div>
+            
+            <div id="chat-protected-content" class="hidden flex flex-col h-full bg-slate-50">
+                <div class="bg-white p-4 pt-12 flex justify-between items-center border-b sticky top-0 z-30 shadow-sm">
+                    <h2 class="text-xs font-black uppercase tracking-widest text-slate-700">💬 Grup Koordinasi</h2>
+                    <button onclick="window.logoutChat()" class="p-2 text-rose-500 bg-rose-50 rounded-xl transition-all">🚪</button>
+                </div>
+                <div id="chat-container" class="chat-scroll flex-1 p-4 overflow-y-auto"></div>
+                <div class="p-4 bg-white border-t flex items-center gap-3 pb-40">
+                    <button onclick="window.openPatientModal()" class="w-12 h-12 bg-slate-100 rounded-2xl flex items-center justify-center text-xl text-slate-400 active:bg-slate-200">⊕</button>
+                    <input type="text" id="chat-input" placeholder="Tulis pesan..." class="flex-1 bg-slate-100 p-4 rounded-2xl text-xs font-semibold outline-none focus:bg-white focus:ring-2 focus:ring-teal-200">
+                    <button onclick="window.sendMessage()" class="bg-teal-600 text-white w-12 h-12 rounded-2xl flex items-center justify-center shadow-lg active:scale-90 transition-all" style="background-color: var(--primary)">➤</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ================= SETTINGS ================= -->
+        <div id="view-settings" class="view-content h-full">
+            <div id="settings-auth-container" class="p-10 flex flex-col items-center justify-center h-full bg-slate-900 text-center text-white">
+                <div class="w-32 h-32 bg-slate-800 rounded-[50px] flex items-center justify-center text-6xl mb-6 shadow-xl border border-slate-700 mx-auto">🔐</div>
+                <h3 class="font-extrabold text-xl mb-2 text-center uppercase tracking-tighter">Panel Admin</h3>
+                <p class="text-slate-500 text-[10px] px-4 mb-10 text-center uppercase tracking-widest">Akses Administrator PKM</p>
+                <input type="password" id="settings-pin-input" maxlength="4" class="w-full max-w-[240px] bg-slate-800 border-2 border-slate-700 p-6 rounded-[30px] text-center text-4xl font-black text-teal-400 outline-none focus:border-teal-500 transition-all shadow-inner" placeholder="••••">
+                <button onclick="window.verifySettingsPin()" class="w-full max-w-[240px] mt-6 bg-white text-slate-900 font-black py-5 rounded-[30px] text-[10px] uppercase shadow-xl active:scale-95 transition-all">Buka Dashboard</button>
+            </div>
+            
+            <div id="settings-protected-content" class="hidden h-full overflow-y-auto bg-slate-50 pb-40">
+                <div class="bg-slate-900 p-6 pt-12 text-white flex justify-between items-end sticky top-0 z-30 shadow-xl">
+                    <div><h2 class="text-xl font-black uppercase italic italic tracking-tighter text-white">Dashboard</h2><p class="text-[9px] font-bold text-slate-500 tracking-[0.2em] uppercase">Puskesmas Admin</p></div>
+                    <button onclick="window.logoutSettings()" class="bg-white/10 p-2.5 rounded-xl transition-all">🚪</button>
+                </div>
+                
+                <div class="p-4 space-y-4" id="settings-accordion">
+                    <!-- Panel Pengaturan -->
+                    <div class="bg-white rounded-3xl shadow-md border border-slate-100 overflow-hidden">
+                        <div onclick="window.togglePanel('panel-sch')" class="p-5 flex justify-between items-center cursor-pointer hover:bg-slate-50 transition-all"><div class="flex items-center gap-3"><span class="text-xl">📅</span><h4 class="font-black text-[11px] uppercase text-slate-700">1. Jadwal Jaga</h4></div><span id="icon-panel-sch" class="chevron-icon text-slate-300">▼</span></div>
+                        <div id="panel-sch" class="setting-panel-content"><div class="px-3 pb-5 text-center"><input type="text" id="search-schedule-input" oninput="window.renderScheduleEditor()" placeholder="Cari..." class="w-full bg-slate-50 border-2 border-slate-100 px-5 py-4 rounded-2xl text-xs font-bold uppercase mb-4"><div id="editor-jadwal-container" class="rekap-wrapper custom-scroll mb-4 border rounded-xl"></div><button onclick="window.resetScheduleTable()" class="text-rose-500 font-bold py-2 text-[10px] uppercase">Reset Jadwal</button></div></div>
+                    </div>
+
+                    <div class="bg-white rounded-3xl shadow-md border border-slate-100 overflow-hidden">
+                        <div onclick="window.togglePanel('panel-officers')" class="p-5 flex justify-between items-center cursor-pointer hover:bg-slate-50"><div class="flex items-center gap-3"><span class="text-xl">🧑‍⚕️</span><h4 class="font-black text-[11px] uppercase text-slate-700">2. Anggota Perawat</h4></div><span id="icon-panel-officers" class="chevron-icon text-slate-300">▼</span></div>
+                        <div id="panel-officers" class="setting-panel-content"><div class="px-5 pb-5 space-y-4"><div id="list-officers" class="space-y-2"></div><div class="flex gap-2"><input type="text" id="input-officer" placeholder="Nama..." class="flex-1 bg-slate-50 border-2 p-4 rounded-2xl text-xs font-bold uppercase focus:border-teal-400"><button onclick="window.addOfficer()" class="bg-teal-600 text-white px-5 rounded-2xl text-[10px] font-black" style="background-color: var(--primary)">TAMBAH</button></div></div></div>
+                    </div>
+
+                    <div class="bg-white rounded-3xl shadow-md border border-slate-100 overflow-hidden">
+                        <div onclick="window.togglePanel('panel-jam')" class="p-5 flex justify-between items-center cursor-pointer hover:bg-slate-50"><div class="flex items-center gap-3"><span class="text-xl">⏰</span><h4 class="font-black text-[11px] uppercase text-slate-700">3. Jam Shift</h4></div><span id="icon-panel-jam" class="chevron-icon text-slate-300">▼</span></div>
+                        <div id="panel-jam" class="setting-panel-content">
+                            <div class="px-5 pb-5 space-y-4 text-xs font-bold uppercase">
+                                <div class="grid grid-cols-2 gap-3"><div>Pagi<input type="time" id="cfg-shift-pagi-start" class="w-full p-3 border rounded-xl bg-slate-50"></div><div>Akhir<input type="time" id="cfg-shift-pagi-end" class="w-full p-3 border rounded-xl bg-slate-50"></div></div>
+                                <div class="grid grid-cols-2 gap-3"><div>Siang<input type="time" id="cfg-shift-siang-start" class="w-full p-3 border rounded-xl bg-slate-50"></div><div>Akhir<input type="time" id="cfg-shift-siang-end" class="w-full p-3 border rounded-xl bg-slate-50"></div></div>
+                                <div class="grid grid-cols-2 gap-3"><div>Malam<input type="time" id="cfg-shift-malam-start" class="w-full p-3 border rounded-xl bg-slate-50"></div><div>Akhir<input type="time" id="cfg-shift-malam-end" class="w-full p-3 border rounded-xl bg-slate-50"></div></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="bg-white rounded-3xl shadow-md border border-slate-100 overflow-hidden">
+                        <div onclick="window.togglePanel('panel-gps')" class="p-5 flex justify-between items-center cursor-pointer hover:bg-slate-50"><div class="flex items-center gap-3"><span class="text-xl">📍</span><h4 class="font-black text-[11px] uppercase text-slate-700">4. Radius GPS</h4></div><span id="icon-panel-gps" class="chevron-icon text-slate-300">▼</span></div>
+                        <div id="panel-gps" class="setting-panel-content"><div class="px-5 pb-5 space-y-4">
+                            <div class="flex justify-between items-center bg-slate-50 p-4 rounded-2xl"><p class="text-[10px] font-bold text-slate-500 uppercase">Batasi Lokasi</p><label class="switch"><input type="checkbox" id="cfg-gps-toggle"><span class="slider"></span></label></div>
+                            <div class="grid grid-cols-2 gap-2"><input type="text" id="cfg-gps-lat" placeholder="Lat" class="bg-slate-50 border-2 p-4 rounded-2xl text-xs font-bold"><input type="text" id="cfg-gps-lng" placeholder="Lng" class="bg-slate-50 border-2 p-4 rounded-2xl text-xs font-bold"></div>
+                            <button onclick="window.getCurrentLocation()" class="w-full bg-teal-50 text-teal-600 font-black py-4 rounded-2xl text-[10px] uppercase border border-teal-100" style="color: var(--primary)">📍 Deteksi Lokasi</button>
+                            <input type="number" id="cfg-gps-radius" placeholder="Radius (Meter)" class="w-full bg-slate-50 border-2 p-4 rounded-2xl text-xs font-bold mt-2">
+                        </div></div>
+                    </div>
+
+                    <div class="bg-white rounded-3xl shadow-md border border-slate-100 overflow-hidden">
+                        <div onclick="window.togglePanel('panel-libur')" class="p-5 flex justify-between items-center cursor-pointer hover:bg-slate-50"><div class="flex items-center gap-3"><span class="text-xl">🗓️</span><h4 class="font-black text-[11px] uppercase text-slate-700">5. Hari Besar</h4></div><span id="icon-panel-libur" class="chevron-icon text-slate-300">▼</span></div>
+                        <div id="panel-libur" class="setting-panel-content"><div class="px-5 pb-5 space-y-4"><div id="list-holidays" class="space-y-2"></div><div class="flex gap-2"><input type="date" id="input-holiday" class="flex-1 bg-slate-50 border-2 p-4 rounded-2xl text-xs font-bold outline-none"><button onclick="window.addHoliday()" class="bg-emerald-600 text-white px-5 rounded-2xl text-[10px] font-black">TAMBAH</button></div></div></div>
+                    </div>
+
+                    <div class="bg-white rounded-3xl shadow-md border border-slate-100 overflow-hidden">
+                        <div onclick="window.togglePanel('panel-sec')" class="p-5 flex justify-between items-center cursor-pointer hover:bg-slate-50"><div class="flex items-center gap-3"><span class="text-xl">🔐</span><h4 class="font-black text-[11px] uppercase text-slate-700">6. Keamanan PIN</h4></div><span id="icon-panel-sec" class="chevron-icon text-slate-300">▼</span></div>
+                        <div id="panel-sec" class="setting-panel-content"><div class="px-5 pb-5 space-y-4 font-bold text-xs uppercase">
+                            <div class="grid grid-cols-2 gap-3">
+                                <div>Admin PIN<input type="password" id="cfg-admin-pin" class="w-full p-3 border rounded-xl bg-slate-50 mt-1"></div>
+                                <div>Chat PIN<input type="text" id="cfg-chat-pin" class="w-full p-3 border rounded-xl bg-slate-50 mt-1"></div>
+                            </div>
+                            <div class="mt-2">Data QR Scan<input type="text" id="cfg-qr-data" class="w-full p-3 border rounded-xl bg-slate-50 mt-1"></div>
+                        </div></div>
+                    </div>
+
+                    <div class="bg-white rounded-3xl shadow-md border border-slate-100 overflow-hidden">
+                        <div onclick="window.togglePanel('panel-rates')" class="p-5 flex justify-between items-center cursor-pointer hover:bg-slate-50"><div class="flex items-center gap-3"><span class="text-xl">💰</span><h4 class="font-black text-[11px] uppercase text-slate-700">7. Tarif Insentif</h4></div><span id="icon-panel-rates" class="chevron-icon text-slate-300">▼</span></div>
+                        <div id="panel-rates" class="setting-panel-content"><div class="px-5 pb-5 space-y-4 uppercase font-bold text-xs">
+                            <div class="grid grid-cols-2 gap-3">
+                                <div>Biasa<input type="number" id="cfg-rate-biasa" class="w-full p-3 border rounded-xl bg-slate-50 mt-1"></div>
+                                <div>Hari Besar<input type="number" id="cfg-rate-besar" class="w-full p-3 border rounded-xl bg-slate-50 mt-1"></div>
+                            </div>
+                        </div></div>
+                    </div>
+
+                    <div class="bg-white rounded-3xl shadow-md border border-slate-100 overflow-hidden">
+                        <div onclick="window.togglePanel('panel-notif')" class="p-5 flex justify-between items-center cursor-pointer hover:bg-slate-50"><div class="flex items-center gap-3"><span class="text-xl">🔊</span><h4 class="font-black text-[11px] uppercase text-slate-700">8. Suara & Notif</h4></div><span id="icon-panel-notif" class="chevron-icon text-slate-300">▼</span></div>
+                        <div id="panel-notif" class="setting-panel-content"><div class="px-5 pb-5 space-y-4 uppercase font-bold text-xs">
+                            <div class="flex justify-between items-center bg-slate-50 p-4 rounded-2xl"><p>Suara Berhasil Scan</p><label class="switch"><input type="checkbox" id="cfg-voice-toggle"><span class="slider"></span></label></div>
+                            <div class="flex justify-between items-center bg-slate-50 p-4 rounded-2xl mt-2"><p>Teks Motivasi Beranda</p><label class="switch"><input type="checkbox" id="cfg-motivation-toggle"><span class="slider"></span></label></div>
+                        </div></div>
+                    </div>
+
+                    <div class="bg-white rounded-3xl shadow-md border border-slate-100 overflow-hidden">
+                        <div onclick="window.togglePanel('panel-theme')" class="p-5 flex justify-between items-center cursor-pointer hover:bg-slate-50 transition-all"><div class="flex items-center gap-3"><span class="text-xl">🎨</span><h4 class="font-black text-[11px] uppercase text-slate-700">9. Tampilan & Nav</h4></div><span id="icon-panel-theme" class="chevron-icon text-slate-300">▼</span></div>
+                        <div id="panel-theme" class="setting-panel-content">
+                            <div class="px-5 pb-5 space-y-6 font-bold text-xs uppercase text-left">
+                                <div>Pilih Warna Tema
+                                <div class="flex gap-4 mt-2"><div onclick="window.setThemeColor('#0d9488', this)" class="color-dot bg-[#0d9488]" data-color="#0d9488"></div><div onclick="window.setThemeColor('#2563eb', this)" class="color-dot bg-[#2563eb]" data-color="#2563eb"></div><div onclick="window.setThemeColor('#7c3aed', this)" class="color-dot bg-[#7c3aed]" data-color="#7c3aed"></div><div onclick="window.setThemeColor('#e11d48', this)" class="color-dot bg-[#e11d48]" data-color="#e11d48"></div></div></div>
+                                <div class="mt-4">Layout Menu Navigasi<select id="cfg-nav-layout" class="w-full p-4 border rounded-2xl bg-slate-50 outline-none mt-1" onchange="window.applyNavLayout(this.value)"><option value="grid">Grid 2x2</option><option value="row">Baris</option></select></div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <button onclick="window.saveFullConfigCloud()" class="w-full bg-teal-600 text-white py-6 rounded-[30px] font-black text-xs uppercase shadow-xl transition-all active:scale-95 shadow-teal-200" id="btn-save-all" style="background-color: var(--primary)">💾 Simpan Seluruh Perubahan</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- DOCK NAVIGASI -->
+    <nav class="dashboard-nav" id="main-nav">
+        <div class="nav-grid">
+            <button onclick="window.showView('home')" id="nav-home" class="nav-card-item active"><span>🏠</span><div><p class="text-[10px] font-bold">Beranda</p></div></button>
+            <button onclick="window.showView('rekap')" id="nav-rekap" class="nav-card-item"><span>📊</span><div><p class="text-[10px] font-bold">Rekap</p></div></button>
+            <button onclick="window.showView('chat')" id="nav-chat" class="nav-card-item relative"><span>💬</span><div><p class="text-[10px] font-bold">Chat</p></div><div id="chat-badge" class="absolute top-2 right-2 w-2 h-2 bg-rose-500 rounded-full hidden"></div></button>
+            <button onclick="window.showView('settings')" id="nav-settings" class="nav-card-item"><span>⚙️</span><div><p class="text-[10px] font-bold">Atur</p></div></button>
+        </div>
+        <div class="nav-action-row"><button id="main-scan-btn-bottom" onclick="window.openScanModal()" class="btn-scan-main"><span>🏥</span><span id="scan-btn-text">Buka Scan Presensi</span></button></div>
+    </nav>
+</div>
+
+<!-- MODAL POP-UPS -->
+<div id="modal-scan" class="modal-overlay" onclick="if(event.target === this) window.closeModal()">
+    <div class="modal-card !p-0 overflow-hidden relative">
+        <div id="scan-success-anim">
+            <div class="success-checkmark">✓</div>
+            <p class="mt-4 text-emerald-600 font-black uppercase text-xs tracking-widest">Presensi Berhasil!</p>
+        </div>
+        <div class="p-6 flex justify-between items-center bg-white border-b">
+            <h3 class="font-black text-slate-800 text-sm uppercase">Scan QR Code</h3>
+            <button onclick="window.closeModal()" class="w-10 h-10 bg-slate-100 text-slate-400 rounded-full flex items-center justify-center">✕</button>
+        </div>
+        <div id="reader" style="width: 100%; min-height: 320px; background: #f1f5f9;"></div>
+    </div>
+</div>
+
+<div id="modal-edit-rekap" class="modal-overlay" onclick="if(event.target === this) window.closeEditRekapModal()">
+    <div class="modal-card">
+        <h3 class="font-extrabold text-slate-800 text-lg mb-2 tracking-tight">✏️ Edit Absensi Manual</h3>
+        <p id="edit-rekap-info" class="text-[10px] text-slate-400 font-bold mb-6 uppercase"></p>
+        <div class="grid grid-cols-3 gap-3 mb-8">
+            <button onclick="window.selectEditStatus('P')" class="py-5 rounded-2xl bg-teal-50 text-teal-600 font-black text-xs border border-teal-100 active:bg-teal-600 active:text-white">PAGI</button>
+            <button onclick="window.selectEditStatus('S')" class="py-5 rounded-2xl bg-amber-50 text-amber-600 font-black text-xs border border-amber-100">SIANG</button>
+            <button onclick="window.selectEditStatus('M')" class="py-5 rounded-2xl bg-blue-50 text-blue-600 font-black text-xs border border-blue-100">MALAM</button>
+            <button onclick="window.selectEditStatus('L')" class="py-5 rounded-2xl bg-rose-50 text-rose-600 font-black text-xs border border-rose-100">LIBUR</button>
+            <button onclick="window.selectEditStatus('V')" class="py-5 rounded-2xl bg-emerald-50 text-emerald-600 font-black text-xs border border-emerald-100">HADIR</button>
+            <button onclick="window.selectEditStatus('')" class="py-5 rounded-2xl bg-slate-100 text-slate-400 font-black text-xs border border-slate-200">HAPUS</button>
+        </div>
+        <button onclick="window.closeEditRekapModal()" class="w-full bg-slate-100 text-slate-500 font-bold py-5 rounded-[25px]">Batal</button>
+    </div>
+</div>
+
+<div id="modal-patient" class="modal-overlay" onclick="if(event.target === this) window.closePatientModal()">
+    <div class="modal-card">
+        <h3 class="font-extrabold text-slate-800 text-lg mb-6 tracking-tight">🩺 Laporan Pasien</h3>
+        <div class="space-y-4">
+            <input type="text" id="pst-nama" placeholder="Nama Pasien" class="w-full bg-slate-50 border-2 border-slate-100 p-4 rounded-2xl text-xs font-bold outline-none focus:border-teal-600">
+            <textarea id="pst-kondisi" placeholder="Diagnosa / Kondisi" class="w-full bg-slate-50 border-2 border-slate-100 p-4 rounded-2xl text-xs font-bold h-24 outline-none focus:border-teal-600"></textarea>
+            <div class="flex gap-3 pt-2"><button onclick="window.closePatientModal()" class="flex-1 bg-slate-100 text-slate-500 font-bold py-4 rounded-2xl text-xs">Batal</button><button onclick="window.sendPatientStatus()" class="flex-1 bg-teal-600 text-white font-bold py-4 rounded-2xl text-xs" style="background-color: var(--primary)">Kirim</button></div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // --- KONFIGURASI DATABASE ---
+    const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbw-Fl_qSNgqr9oEnn3vUmCtN4bRCZ5M7wz5YMiofUD33pN-kICuL6zubelKVcI_k2luXg/exec";
+    const db = {
+        activeUser: localStorage.getItem('presensi_user') || null,
+        isSettingsAuth: localStorage.getItem('is_admin_auth') === 'true',
+        isChatAuth: localStorage.getItem('is_chat_auth') === 'true',
+        officers: [], logs: [], schedule: {}, attendance: {}, holidays: [],
+        config: { adminPin: "1111", chatPin: "ugd", qrData: "SISTEM-PRO-01", themeColor: '#0d9488', navLayout: 'grid', voice: true, shiftHours: { Pagi: { start: "08:00", end: "14:00" }, Siang: { start: "14:00", end: "20:00" }, Malam: { start: "20:00", end: "08:00" } }, rates: { biasa: 0, besar: 0 } }
+    };
+    let h5q = null;
+
+    // --- FUNGSI INTI ---
+    function safeSetText(id, txt) { const el = document.getElementById(id); if(el) el.innerText = txt; }
+    function safeSetHTML(id, html) { const el = document.getElementById(id); if(el) el.innerHTML = html; }
+    function safeSetValue(id, val) { const el = document.getElementById(id); if(el) el.value = val; }
+    function safeSetChecked(id, val) { const el = document.getElementById(id); if(el) el.checked = !!val; }
+    function showLoading(s) { var l = document.getElementById('loading'); if(l) s ? l.classList.remove('hidden') : l.classList.add('hidden'); }
+    
+    /**
+     * Fungsi fetch yang disempurnakan untuk menangani masalah redirect GAS dan CORS.
+     * Menggunakan text/plain untuk body POST guna menghindari OPTIONS preflight.
+     */
+    async function fetchWithRetry(url, options = {}, retries = 5, backoff = 1000) {
+        const fetchOptions = {
+            ...options,
+            mode: 'cors',
+            redirect: 'follow',
+            cache: 'no-cache'
+        };
+
+        // GAS Hack: Jika ada body (POST), set content-type ke text/plain untuk menghindari preflight CORS
+        if (fetchOptions.body && fetchOptions.method === 'POST') {
+            // Kita tidak menyetel header Content-Type secara eksplisit agar tetap menjadi 'simple request'
+            // atau kita set ke text/plain jika diperlukan.
+        }
+
+        try {
+            const response = await fetch(url, fetchOptions);
+            if (!response.ok) throw new Error(`HTTP Error: ${response.status}`);
+            return response;
+        } catch (error) {
+            console.warn(`Fetch gagal. Sisa percobaan: ${retries}`, error);
+            if (retries > 0) {
+                await new Promise(resolve => setTimeout(resolve, backoff));
+                return fetchWithRetry(url, options, retries - 1, backoff * 1.5);
+            }
+            throw error;
+        }
+    }
+
+    function getTodayStr() {
+        const n = new Date();
+        return ("0"+n.getDate()).slice(-2)+"/"+("0"+(n.getMonth()+1)).slice(-2)+"/"+n.getFullYear();
+    }
+
+    function getShiftData() {
+        const now = new Date(), cur = now.getHours() * 60 + now.getMinutes(), sh = db.config.shiftHours;
+        const parse = (t) => { if(!t) return 0; const p = String(t).split(':'); return parseInt(p[0])*60 + (p[1]?parseInt(p[1]):0); };
+        if(cur >= parse(sh.Pagi.start) && cur < parse(sh.Pagi.end)) return {l:'Pagi', emoji:'☀️', code:'P'};
+        if(cur >= parse(sh.Siang.start) && cur < parse(sh.Siang.end)) return {l:'Siang', emoji:'🌅', code:'S'};
+        return {l:'Malam', emoji:'🌙', code:'M'};
+    }
+
+    function showModernNotify(type, title, msg) {
+        const toast = document.getElementById('modern-toast');
+        if(!toast) return;
+        toast.className = (type === 'success' ? 'toast-success show' : 'toast-error show') + ' flex items-center';
+        safeSetText('toast-title', title); safeSetText('toast-body', msg);
+        setTimeout(() => { toast.classList.remove('show'); }, 4000);
+    }
+
+    function updateOnlineStatus() {
+        const bar = document.getElementById('connection-status'); if(!bar) return;
+        bar.className = navigator.onLine ? 'status-online' : 'status-offline';
+        bar.innerText = navigator.onLine ? 'Terhubung' : 'Offline';
+    }
+
+    // --- REGISTRASI GLOBAL ---
+    window.syncUI = function() {
+        safeSetText('user-display-name', db.activeUser || "Selamat Datang");
+        const sel = document.getElementById('select-onboarding'); 
+        if(sel) sel.innerHTML = db.officers.length ? '<option value="">-- PILIH IDENTITAS --</option>' + db.officers.map(o => `<option value="${o}" ${db.activeUser === o ? 'selected' : ''}>${o}</option>`).join('') : '<option value="">Daftar Kosong</option>';
+        document.getElementById('section-login').classList.toggle('hidden', !!db.activeUser);
+        document.getElementById('logout-btn').classList.toggle('hidden', !db.activeUser);
+        ['section-planned-schedule','section-actual-duty','section-daily-log'].forEach(id => {
+            const el = document.getElementById(id); if(el) el.classList.toggle('hidden', !db.activeUser);
+        });
+        const sa = document.getElementById('settings-auth-container'), sp = document.getElementById('settings-protected-content');
+        const ca = document.getElementById('chat-auth-container'), cp = document.getElementById('chat-protected-content');
+        if(db.isSettingsAuth){ sa?.classList.add('hidden'); sp?.classList.remove('hidden'); } 
+        else { sa?.classList.remove('hidden'); sp?.classList.add('hidden'); }
+        if(db.isChatAuth){ ca?.classList.add('hidden'); cp?.classList.remove('hidden'); } 
+        else { ca?.classList.remove('hidden'); cp?.classList.add('hidden'); }
+    };
+
+    window.renderScheduleEditor = function() {
+        const c = document.getElementById('editor-jadwal-container'); if(!c) return;
+        const now = new Date(), yr = now.getFullYear(), mo = now.getMonth(), days = new Date(yr, mo+1, 0).getDate();
+        const filter = (document.getElementById('search-schedule-input')?.value || "").toUpperCase();
+        let h = `<table class="editor-table"><thead><tr><th class="sticky-col">PERAWAT</th>`;
+        for(let d=1; d<=days; d++) h += `<th>${d}</th>`;
+        h += `</tr></thead><tbody>`;
+        db.officers.filter(n => n.toUpperCase().includes(filter)).forEach(name => {
+            h += `<tr><td class="sticky-col uppercase font-black text-xs">${name}</td>`;
+            for(let d=1; d<=days; d++) {
+                const v = (db.schedule[name] && db.schedule[name][d]) ? db.schedule[name][d] : '';
+                h += `<td class="cell-${v}"><select onchange="window.updateLocalSch('${name}',${d},this.value,this.parentElement)" class="bg-transparent text-center font-bold w-full outline-none appearance-none"><option value=""></option><option value="P" ${v==='P'?'selected':''}>P</option><option value="S" ${v==='S'?'selected':''}>S</option><option value="M" ${v==='M'?'selected':''}>M</option><option value="L" ${v==='L'?'selected':''}>L</option><option value="V" ${v==='V'?'selected':''}>V</option></select></td>`;
+            }
+            h += `</tr>`;
+        });
+        h += `</tbody></table>`;
+        safeSetHTML('editor-jadwal-container', h);
+    };
+
+    window.renderRekap = function() {
+        const now = new Date(), yr = now.getFullYear(), mo = now.getMonth(), days = new Date(yr, mo+1, 0).getDate();
+        let h = `<table class="editor-table"><thead><tr><th class="sticky-col">PERAWAT</th>`;
+        for(let d=1; d<=days; d++) h += `<th class="${new Date(yr, mo, d).getDay() === 0 ? 'text-sunday' : ''}">${d}</th>`;
+        h += `<th class="text-white" style="background-color: var(--primary)">TOT</th></tr></thead><tbody>`;
+        db.officers.forEach(name => {
+            const key = name.trim().toUpperCase(), att = db.attendance[key] || {};
+            h += `<tr><td class="sticky-col uppercase font-black text-xs">${name}</td>`;
+            for(let d=1; d<=days; d++) {
+                const val = att[d] || '', click = db.isSettingsAuth ? `onclick="window.editRekapCell('${name}', ${d})"` : '';
+                h += `<td class="cell-${val} font-bold rekap-cell-editable" ${click}>${val}</td>`;
+            }
+            h += `<td class="font-black" style="color: var(--primary)">${Object.keys(att).length}</td></tr>`;
+        });
+        safeSetHTML('rekap-table-container', h + `</tbody></table>`);
+    };
+
+    window.renderArchive = function() {
+        const al = document.getElementById('rekap-archive-list'); if(!al) return;
+        const uniqueMonths = {}; const now = new Date(); const currentKey = (now.getMonth() + 1) + "/" + now.getFullYear();
+        db.logs.forEach(l => { const p = String(l.date).split('/'); if(p.length === 3) { var moY = p[1] + "/" + p[2]; if (moY !== currentKey) { uniqueMonths[moY] = { m: parseInt(p[1]), y: parseInt(p[2]) }; } } });
+        const sortedMonths = Object.values(uniqueMonths).sort((a,b) => b.y - a.y || b.m - a.m);
+        if(!sortedMonths.length) { al.innerHTML = ''; return; }
+        al.innerHTML = '<h4 class="px-2 font-black text-slate-800 text-[10px] uppercase tracking-widest mt-6 mb-2">Arsip Laporan</h4>' + sortedMonths.map(m => {
+            const label = new Date(m.y, m.m - 1, 1).toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
+            return `<div class="bg-white p-5 rounded-2xl border border-slate-100 flex justify-between items-center shadow-sm mb-2"><div><p class="text-[11px] font-black text-slate-700 uppercase">${label}</p></div><button onclick="window.exportToExcel('rekap', ${m.m}, ${m.y})" class="bg-slate-50 text-teal-600 font-bold" style="color: var(--primary)">📥</button></div>`;
+        }).join('');
+    };
+
+    window.render = function() {
+        const sh = getShiftData(), today = getTodayStr(), now = new Date();
+        safeSetText('clock', now.toLocaleTimeString('id-ID', { hour:'2-digit', minute:'2-digit' }));
+        safeSetText('date-label', now.toLocaleDateString('id-ID', { weekday:'long', day:'2-digit', month:'long' }));
+        safeSetText('shift-label', "Shift " + sh.l); safeSetText('shift-icon', sh.emoji);
+        
+        let schH = '<table class="schedule-table"><tbody>';
+        ['Pagi','Siang','Malam'].forEach(sName => {
+            const assigned = db.officers.filter(n => db.schedule[n] && db.schedule[n][now.getDate()] === sName[0]);
+            const isCur = sName.toLowerCase() === sh.l.toLowerCase();
+            schH += `<tr><td class="${isCur ? 'current-shift-card' : ''}"><div class="font-black text-slate-700 text-xs">${sName}</div></td><td class="${isCur ? 'current-shift-card' : ''}">${assigned.length ? assigned.map(o => `<span class="staff-pill ${isCur ? 'staff-pill-active' : ''}">${o}</span>`).join('') : '<span class="text-slate-300 italic text-[10px]">Kosong</span>'}</td></tr>`;
+        });
+        safeSetHTML('planned-schedule-list', schH + '</tbody></table>');
+
+        const actLogs = db.logs.filter(l => l.date === today && l.shift.toLowerCase() === sh.l.toLowerCase());
+        safeSetHTML('current-duty-list', actLogs.length ? actLogs.map(l => `<div class="bg-white p-3 rounded-2xl flex items-center gap-3 border border-emerald-100"><div class="w-8 h-8 rounded-lg bg-emerald-500 text-white flex items-center justify-center font-black text-xs">${l.name[0]}</div><div><p class="text-[10px] font-black uppercase text-slate-700">${l.name}</p><p class="text-[7px] font-bold text-emerald-500 uppercase">${l.time}</p></div></div>`).join('') : '<p class="text-center py-4 text-[10px] font-bold text-slate-300 uppercase">Belum ada absen masuk</p>');
+        
+        const dailyLogs = db.logs.filter(l => l.date === today);
+        safeSetHTML('daily-log-list', dailyLogs.length ? dailyLogs.slice(0,10).map(l => `<div class="bg-white p-3 rounded-2xl flex items-center justify-between border border-slate-100"><div class="flex items-center gap-3"><div class="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-xs text-slate-400 font-bold">${l.name[0]}</div><div><p class="text-[10px] font-black uppercase text-slate-700">${l.name}</p><p class="text-[7px] font-bold text-slate-400 uppercase">${l.shift} • ${l.time}</p></div></div><div class="text-[8px] font-black text-emerald-500 bg-emerald-50 px-2 py-1 rounded-lg">OK</div></div>`).join('') : '<p class="text-center py-4 text-[10px] font-bold text-slate-300">Belum ada scan</p>');
+
+        const color = db.config.themeColor || '#0d9488';
+        document.getElementById('dynamic-theme').innerHTML = `:root { --primary: ${color}; --primary-light: ${color}15; --accent: #f43f5e; --bg: #f8fafc; }`;
+        const body = document.getElementById('body-main');
+        if(db.config.navLayout === 'row') { body.classList.remove('nav-layout-grid'); body.classList.add('nav-layout-row'); } 
+        else { body.classList.remove('nav-layout-row'); body.classList.add('nav-layout-grid'); }
+
+        window.renderRekap(); window.renderArchive(); window.renderScheduleEditor(); window.syncUI();
+    };
+
+    // --- ACTIONS ---
+    window.lockAccount = function() { const v = document.getElementById('select-onboarding').value; if(!v) return; db.activeUser = v; localStorage.setItem('presensi_user', v); window.render(); };
+    window.logout = function() { if(confirm("Keluar?")) { localStorage.removeItem('presensi_user'); db.activeUser=null; window.render(); } };
+    
+    window.verifySettingsPin = function() {
+        const pin = document.getElementById('settings-pin-input').value;
+        if(pin === db.config.adminPin) { db.isSettingsAuth=true; localStorage.setItem('is_admin_auth','true'); window.loadData(); }
+        else showModernNotify('error', 'PIN Salah', 'Akses dashboard ditolak.');
+    };
+    window.logoutSettings = () => { db.isSettingsAuth=false; localStorage.removeItem('is_admin_auth'); window.render(); };
+
+    window.verifyChatPin = function() {
+        const pin = document.getElementById('chat-pin-input').value;
+        if(pin === db.config.chatPin) { db.isChatAuth=true; localStorage.setItem('is_chat_auth','true'); window.render(); }
+        else showModernNotify('error', 'PIN Salah', 'PIN Chat tidak valid.');
+    };
+    window.logoutChat = () => { db.isChatAuth=false; localStorage.removeItem('is_chat_auth'); window.render(); };
+
+    window.showView = function(v) { document.querySelectorAll('.view-content').forEach(el => el.classList.remove('active')); document.getElementById('view-'+v).classList.add('active'); document.querySelectorAll('.nav-card-item').forEach(el => el.classList.remove('active')); document.getElementById('nav-'+v)?.classList.add('active'); if(v === 'rekap') window.loadData('background'); };
+    window.togglePanel = (id) => { document.getElementById(id).classList.toggle('open'); };
+    window.togglePlannedSchedule = () => { document.getElementById('planned-schedule-container').classList.toggle('open'); };
+    window.updateLocalSch = (n, d, v, cell) => { if(!db.schedule[n]) db.schedule[n] = {}; db.schedule[n][d] = v; cell.className = v ? 'cell-'+v : ''; };
+    window.resetScheduleTable = () => { if(confirm("Hapus jadwal bulan ini?")) { db.schedule = {}; window.renderScheduleEditor(); } };
+    window.setThemeColor = (color, el) => { db.config.themeColor = color; window.render(); };
+    window.applyNavLayout = (l) => { db.config.navLayout = l; window.render(); };
+    window.getCurrentLocation = () => { if (navigator.geolocation) { navigator.geolocation.getCurrentPosition(pos => { safeSetValue('cfg-gps-lat', pos.coords.latitude.toFixed(6)); safeSetValue('cfg-gps-lng', pos.coords.longitude.toFixed(6)); }); } };
+    window.addOfficer = () => { const i = document.getElementById('input-officer'); if(i.value.trim()){ db.officers.push(i.value.trim().toUpperCase()); i.value = ''; window.render(); } };
+    window.addHoliday = () => { const i = document.getElementById('input-holiday'); if(i.value){ db.holidays.push(i.value); i.value = ''; window.fillConfigInputs(); } };
+
+    window.saveFullConfigCloud = async function() {
+        db.config.gpsEnabled = document.getElementById('cfg-gps-toggle').checked;
+        db.config.lat = document.getElementById('cfg-gps-lat').value; db.config.lng = document.getElementById('cfg-gps-lng').value; db.config.radius = document.getElementById('cfg-gps-radius').value;
+        db.config.adminPin = document.getElementById('cfg-admin-pin').value; db.config.chatPin = document.getElementById('cfg-chat-pin').value; db.config.qrData = document.getElementById('cfg-qr-data').value;
+        db.config.rates.biasa = document.getElementById('cfg-rate-biasa').value; db.config.rates.besar = document.getElementById('cfg-rate-besar').value;
+        db.config.voice = document.getElementById('cfg-voice-toggle').checked; db.config.motivation = document.getElementById('cfg-motivation-toggle').checked;
+        db.config.navLayout = document.getElementById('cfg-nav-layout').value;
+        db.config.shiftHours.Pagi.start = document.getElementById('cfg-shift-pagi-start').value; db.config.shiftHours.Pagi.end = document.getElementById('cfg-shift-pagi-end').value;
+        db.config.shiftHours.Siang.start = document.getElementById('cfg-shift-siang-start').value; db.config.shiftHours.Siang.end = document.getElementById('cfg-shift-siang-end').value;
+        db.config.shiftHours.Malam.start = document.getElementById('cfg-shift-malam-start').value; db.config.shiftHours.Malam.end = document.getElementById('cfg-shift-malam-end').value;
+        const btn = document.getElementById('btn-save-all'); btn.innerText = "⏳ MENYIMPAN..."; btn.disabled = true;
+        const res = await postToCloud('updateFullConfig', { config: db.config, officers: db.officers, schedule: db.schedule, holidays: db.holidays });
+        btn.innerText = "💾 SIMPAN SELURUH PERUBAHAN"; btn.disabled = false;
+        if(res) showModernNotify('success', 'Tersimpan', 'Konfigurasi Cloud diperbarui.');
+    };
+
+    window.openScanModal = async function() {
+        if(!db.activeUser) return showModernNotify('error', 'Login!', 'Pilih perawat di Beranda.');
+        const modal = document.getElementById('modal-scan'); const anim = document.getElementById('scan-success-anim');
+        modal.style.display = 'flex'; anim.style.display = 'none';
+        try {
+            if(!h5q) h5q = new Html5Qrcode("reader");
+            await h5q.start({ facingMode: "environment" }, { fps: 15, qrbox: 250 }, async (txt) => {
+                if(txt === db.config.qrData) {
+                    anim.style.display = 'flex';
+                    if (db.config.voice && 'speechSynthesis' in window) { window.speechSynthesis.speak(new SpeechSynthesisUtterance("Berhasil")); }
+                    setTimeout(async () => {
+                        await h5q.stop(); modal.style.display = 'none';
+                        await postToCloud('saveScan', { name: db.activeUser, date: getTodayStr(), shift: getShiftData().l, time: new Date().toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'}) });
+                        showModernNotify('success', 'Berhasil', 'Scan tercatat.');
+                    }, 1200);
+                }
+            });
+        } catch (e) { modal.style.display = 'none'; showModernNotify('error', 'Kamera', 'Berikan izin kamera.'); }
+    };
+
+    window.closeModal = async () => { if(h5q) { try{await h5q.stop();}catch(e){} } document.getElementById('modal-scan').style.display = 'none'; };
+    window.editRekapCell = (n, d) => { db.activeEditCell = { name: n, day: d }; safeSetText('edit-rekap-info', `${n} | Tgl ${d}`); document.getElementById('modal-edit-rekap').style.display = 'flex'; };
+    window.closeEditRekapModal = () => { document.getElementById('modal-edit-rekap').style.display = 'none'; };
+    window.selectEditStatus = async (s) => { const { name, day } = db.activeEditCell; const date = `${("0"+day).slice(-2)}/${("0"+(new Date().getMonth()+1)).slice(-2)}/${new Date().getFullYear()}`; document.getElementById('modal-edit-rekap').style.display = 'none'; await postToCloud('saveScan', { name: name, date: date, shift: s || "Dihapus", time: "EDIT" }); };
+    window.openPatientModal = () => { document.getElementById('modal-patient').style.display = 'flex'; };
+    window.closePatientModal = () => { document.getElementById('modal-patient').style.display = 'none'; };
+    window.sendPatientStatus = () => { const n = document.getElementById('pst-nama').value; if(!n) return; postToCloud('saveChat', { name: db.activeUser, message: `📋 LAPORAN: ${n}\n${document.getElementById('pst-kondisi').value}`, time: new Date().toLocaleTimeString() }); closePatientModal(); showModernNotify('success', 'Terkirim', 'Laporan terkirim.'); };
+    window.sendMessage = () => { const i = document.getElementById('chat-input'); if (!i.value.trim()) return; postToCloud('saveChat', { name: db.activeUser, message: i.value.trim(), time: new Date().toLocaleTimeString() }); i.value = ''; };
+
+    window.exportToExcel = function() {
+        const now = new Date(), yr = now.getFullYear(), mo = now.getMonth(), days = new Date(yr, mo+1, 0).getDate();
+        const headers = ["NAMA PERAWAT"]; for(let d=1; d<=days; d++) headers.push(d); headers.push("TOTAL");
+        const rows = [headers];
+        db.officers.forEach(n => {
+            const att = db.attendance[n.trim().toUpperCase()] || {};
+            const r = [n]; for(let d=1; d<=days; d++) r.push(att[d]||"");
+            r.push(Object.keys(att).length); rows.push(r);
+        });
+        const ws = XLSX.utils.aoa_to_sheet(rows), wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Rekap");
+        XLSX.writeFile(wb, "Rekap_Perawat_Presensi.xlsx");
+    };
+
+    window.loadData = async function(mode) {
+        if(mode !== 'background') showLoading(true);
+        try {
+            // Menggunakan fetchWithRetry yang diperkuat
+            const r = await fetchWithRetry(WEB_APP_URL + "?action=getData", { method: "GET" });
+            const d = await r.json();
+            db.officers = d.officers || []; db.logs = d.logs || []; db.schedule = d.schedule || {}; if(d.config) db.config = Object.assign(db.config, d.config);
+            db.attendance = {};
+            const now = new Date();
+            db.logs.slice().reverse().forEach(l => {
+                if(!l.date) return;
+                const p = l.date.split('/'); if(p.length < 3) return;
+                if(parseInt(p[1])-1 === now.getMonth() && parseInt(p[2]) === now.getFullYear()) {
+                    const key = l.name.trim().toUpperCase(); if(!db.attendance[key]) db.attendance[key] = {};
+                    db.attendance[key][parseInt(p[0])] = l.shift && l.shift !== "Dihapus" ? l.shift[0].toUpperCase() : '';
+                }
+            });
+            window.render();
+            if(db.isSettingsAuth) window.fillConfigInputs();
+        } catch(e) { 
+            console.error("Kesalahan pengambilan data:", e);
+            // Jika benar-benar gagal, gunakan data lokal dari localStorage sebagai cadangan jika ada
+            showModernNotify('error', 'Koneksi Terhambat', 'Gagal memuat data dari server. Pastikan skrip Google Apps Script Anda dipublikasikan dengan benar.');
+        } finally { showLoading(false); }
+    };
+
+    window.fillConfigInputs = function() {
+        const c = db.config;
+        safeSetChecked('cfg-gps-toggle', c.gpsEnabled); safeSetValue('cfg-gps-lat', c.lat); safeSetValue('cfg-gps-lng', c.lng); safeSetValue('cfg-gps-radius', c.radius);
+        safeSetValue('cfg-admin-pin', c.adminPin); safeSetValue('cfg-chat-pin', c.chatPin); safeSetValue('cfg-qr-data', c.qrData);
+        safeSetValue('cfg-rate-biasa', c.rates.biasa); safeSetValue('cfg-rate-besar', c.rates.besar);
+        safeSetChecked('cfg-voice-toggle', c.voice); safeSetChecked('cfg-motivation-toggle', c.motivation);
+        safeSetValue('cfg-nav-layout', c.navLayout || 'grid');
+        if(c.shiftHours){
+            safeSetValue('cfg-shift-pagi-start', c.shiftHours.Pagi.start); safeSetValue('cfg-shift-pagi-end', c.shiftHours.Pagi.end);
+            safeSetValue('cfg-shift-siang-start', c.shiftHours.Siang.start); safeSetValue('cfg-shift-siang-end', c.shiftHours.Siang.end);
+            safeSetValue('cfg-shift-malam-start', c.shiftHours.Malam.start); safeSetValue('cfg-shift-malam-end', c.shiftHours.Malam.end);
+        }
+        const listH = document.getElementById('list-holidays');
+        if(listH && db.holidays) listH.innerHTML = db.holidays.map((h, i) => `<div class="bg-slate-50 p-3 rounded-xl flex justify-between items-center text-xs font-bold mb-2"><span>${h}</span><button onclick="db.holidays.splice(${i},1);window.fillConfigInputs()" class="text-rose-500">HAPUS</button></div>`).join('');
+    };
+
+    async function postToCloud(action, payload) {
+        try { 
+            // Untuk POST ke GAS, gunakan body JSON string dalam request ber-metode POST
+            // Kita bungkus fetch ke dalam fetchWithRetry
+            const r = await fetchWithRetry(WEB_APP_URL, { 
+                method: "POST", 
+                body: JSON.stringify({ action, payload })
+            }); 
+            const res = await r.json(); 
+            if(res.status === 'success') await window.loadData('background'); 
+            return res.status === 'success'; 
+        } catch(e) { 
+            console.error("Kesalahan Cloud Post:", e);
+            showModernNotify('error', 'Gagal Simpan', 'Koneksi ke server terputus.');
+            return false; 
+        }
+    }
+
+    window.onload = () => {
+        updateOnlineStatus(); window.addEventListener('online', updateOnlineStatus); window.addEventListener('offline', updateOnlineStatus);
+        window.loadData();
+        setInterval(() => { safeSetText('clock', new Date().toLocaleTimeString('id-ID', { hour:'2-digit', minute:'2-digit' })); }, 30000);
+    };
+</script>
+</body>
+</html>
