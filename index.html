@@ -214,7 +214,6 @@
             animation: pulse-dot 1.25s cubic-bezier(0.455, 0.03, 0.515, 0.955) -.4s infinite;
         }
 
-        /* FAB RELOAD */
         .fab-reload {
             position: fixed; bottom: 200px; right: 16px;
             width: 48px; height: 48px; background: white;
@@ -225,18 +224,27 @@
         }
         .fab-reload:active { transform: scale(0.9) rotate(45deg); }
 
-        /* CHAT STYLE UPDATES */
-        .chat-options-btn {
-            opacity: 0; transition: 0.2s;
+        .badge-ping {
+            position: absolute; top: -2px; right: -2px;
+            width: 10px; height: 10px; background-color: #f43f5e;
+            border-radius: 50%; border: 2px solid white;
         }
-        .chat-bubble-wrapper:hover .chat-options-btn {
-            opacity: 1;
+
+        /* CHAT STYLE UPDATES */
+        .chat-bubble {
+            cursor: pointer;
+            transition: transform 0.1s;
+        }
+        .chat-bubble:active {
+            transform: scale(0.98);
+        }
+        .chat-control-text {
+            font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em;
         }
     </style>
 </head>
 <body class="nav-layout-grid" id="body-main">
 
-<!-- LOADING INDIKATOR LATAR BELAKANG (NON-BLOCKING) -->
 <div id="loading" class="hidden fixed top-6 left-1/2 -translate-x-1/2 bg-white/95 backdrop-blur-md px-4 py-2.5 rounded-2xl shadow-2xl z-[2000] flex items-center gap-3 border border-slate-100 ring-4 ring-black/5 animate-bounce">
     <div class="w-4 h-4 border-2 border-teal-600 border-t-transparent rounded-full animate-spin" style="border-top-color: var(--primary)"></div>
     <p class="font-extrabold text-slate-700 text-[10px] uppercase tracking-widest whitespace-nowrap">Sinkronisasi Data...</p>
@@ -244,7 +252,7 @@
 
 <!-- NOTIFICATION TOAST -->
 <div id="modern-toast" class="toast-success flex items-center">
-    <div class="w-10 h-10 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center font-bold mr-3">✓</div>
+    <div id="toast-icon" class="w-10 h-10 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center font-bold mr-3">✓</div>
     <div class="flex-1">
         <p id="toast-title" class="text-xs font-black uppercase text-slate-800 tracking-tight">Berhasil</p>
         <p id="toast-body" class="text-[10px] font-bold text-slate-400">Data Anda telah diperbarui.</p>
@@ -400,7 +408,6 @@
                 </div>
                 
                 <div class="p-4 space-y-4" id="settings-accordion">
-                    <!-- Panel Pengaturan -->
                     <div class="bg-white rounded-3xl shadow-md border border-slate-100 overflow-hidden">
                         <div onclick="window.togglePanel('panel-sch')" class="p-5 flex justify-between items-center cursor-pointer hover:bg-slate-50 transition-all"><div class="flex items-center gap-3"><span class="text-xl">📅</span><h4 class="font-black text-[11px] uppercase text-slate-700">1. Jadwal Jaga</h4></div><span id="icon-panel-sch" class="chevron-icon text-slate-300">▼</span></div>
                         <div id="panel-sch" class="setting-panel-content"><div class="px-3 pb-5 text-center"><input type="text" id="search-schedule-input" oninput="window.renderScheduleEditor()" placeholder="Cari..." class="w-full bg-slate-50 border-2 border-slate-100 px-5 py-4 rounded-2xl text-xs font-bold uppercase mb-4"><div id="editor-jadwal-container" class="rekap-wrapper custom-scroll mb-4 border rounded-xl"></div><button onclick="window.resetScheduleTable()" class="text-rose-500 font-bold py-2 text-[10px] uppercase">Reset Jadwal</button></div></div>
@@ -488,7 +495,11 @@
         <div class="nav-grid">
             <button onclick="window.showView('home')" id="nav-home" class="nav-card-item active"><span>🏠</span><div><p class="text-[10px] font-bold">Beranda</p></div></button>
             <button onclick="window.showView('rekap')" id="nav-rekap" class="nav-card-item"><span>📊</span><div><p class="text-[10px] font-bold">Rekap</p></div></button>
-            <button onclick="window.showView('chat')" id="nav-chat" class="nav-card-item relative"><span>💬</span><div><p class="text-[10px] font-bold">Chat</p></div><div id="chat-badge" class="absolute top-2 right-2 w-2 h-2 bg-rose-500 rounded-full hidden"></div></button>
+            <button onclick="window.showView('chat')" id="nav-chat" class="nav-card-item relative">
+                <span>💬</span>
+                <div><p class="text-[10px] font-bold">Chat</p></div>
+                <div id="chat-badge" class="badge-ping hidden"></div>
+            </button>
             <button onclick="window.showView('settings')" id="nav-settings" class="nav-card-item"><span>⚙️</span><div><p class="text-[10px] font-bold">Atur</p></div></button>
         </div>
         <div class="nav-action-row"><button id="main-scan-btn-bottom" onclick="window.openScanModal()" class="btn-scan-main"><span>🏥</span><span id="scan-btn-text">Buka Scan Presensi</span></button></div>
@@ -526,7 +537,7 @@
     </div>
 </div>
 
-<!-- MODAL EDIT CHAT -->
+<!-- MODAL EDIT CHAT (POPUP WHATSAPP STYLE) -->
 <div id="modal-edit-chat" class="modal-overlay" onclick="if(event.target === this) window.closeEditChatModal()">
     <div class="modal-card">
         <h3 class="font-extrabold text-slate-800 text-lg mb-4 tracking-tight">✏️ Edit Pesan</h3>
@@ -556,6 +567,9 @@
         activeUser: localStorage.getItem('presensi_user') || null,
         isSettingsAuth: localStorage.getItem('is_admin_auth') === 'true',
         isChatAuth: localStorage.getItem('is_chat_auth') === 'true',
+        activeView: 'home',
+        lastChatId: localStorage.getItem('last_chat_id') || "0",
+        selectedMsgId: null, // Track pesan yang diklik untuk opsi
         officers: [], logs: [], schedule: {}, attendance: {}, holidays: [],
         chat: [], 
         config: { adminPin: "1111", chatPin: "ugd", qrData: "SISTEM-PRO-01", themeColor: '#0d9488', navLayout: 'grid', voice: true, shiftHours: { Pagi: { start: "08:00", end: "14:00" }, Siang: { start: "14:00", end: "20:00" }, Malam: { start: "20:00", end: "08:00" } }, rates: { biasa: 0, besar: 0 } }
@@ -573,6 +587,28 @@
         if(l) s ? l.classList.remove('hidden') : l.classList.add('hidden'); 
     }
     
+    function showModernNotify(type, title, msg) {
+        const toast = document.getElementById('modern-toast');
+        const icon = document.getElementById('toast-icon');
+        if(!toast) return;
+        
+        toast.className = (type === 'success' ? 'toast-success show' : 'toast-error show') + ' flex items-center';
+        if(type === 'info') {
+            toast.classList.add('!border-teal-200');
+            icon.innerText = "💬";
+            icon.className = "w-10 h-10 bg-teal-50 text-teal-600 rounded-xl flex items-center justify-center font-bold mr-3";
+        } else if(type === 'error') {
+            icon.innerText = "✕";
+            icon.className = "w-10 h-10 bg-rose-50 text-rose-600 rounded-xl flex items-center justify-center font-bold mr-3";
+        } else {
+            icon.innerText = "✓";
+            icon.className = "w-10 h-10 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center font-bold mr-3";
+        }
+        
+        safeSetText('toast-title', title); safeSetText('toast-body', msg);
+        setTimeout(() => { toast.classList.remove('show'); }, 5000);
+    }
+
     async function fetchWithRetry(url, options = {}, retries = 5, backoff = 1000) {
         const fetchOptions = { ...options, mode: 'cors', redirect: 'follow', cache: 'no-cache' };
         try {
@@ -600,14 +636,6 @@
         if(cur >= parse(sh.Pagi.start) && cur < parse(sh.Pagi.end)) return {l:'Pagi', emoji:'☀️', code:'P'};
         if(cur >= parse(sh.Siang.start) && cur < parse(sh.Siang.end)) return {l:'Siang', emoji:'🌅', code:'S'};
         return {l:'Malam', emoji:'🌙', code:'M'};
-    }
-
-    function showModernNotify(type, title, msg) {
-        const toast = document.getElementById('modern-toast');
-        if(!toast) return;
-        toast.className = (type === 'success' ? 'toast-success show' : 'toast-error show') + ' flex items-center';
-        safeSetText('toast-title', title); safeSetText('toast-body', msg);
-        setTimeout(() => { toast.classList.remove('show'); }, 4000);
     }
 
     function updateOnlineStatus() {
@@ -682,6 +710,7 @@
         }).join('');
     };
 
+    // FUNGSI CHAT DENGAN OPSI TEKS KECIL
     window.renderChat = function() {
         const container = document.getElementById('chat-container');
         if (!container) return;
@@ -694,9 +723,9 @@
         container.innerHTML = db.chat.map(m => {
             const isMe = m.name === db.activeUser;
             const isReport = m.message.includes('📋 LAPORAN:');
-            const status = m.status || 'sent'; // default sent
+            const status = m.status || 'sent';
+            const showControls = db.selectedMsgId === m.msgId;
             
-            // Centang UI
             let checkmark = '';
             if(isMe) {
                 if(status === 'sending') checkmark = '<span class="ml-1 text-[10px] opacity-70">✓</span>';
@@ -704,26 +733,39 @@
             }
 
             return `
-                <div class="flex ${isMe ? 'justify-end' : 'justify-start'} mb-4 chat-bubble-wrapper group relative">
-                    <div class="max-w-[85%] ${isMe ? 'bg-teal-600 text-white rounded-l-2xl rounded-tr-2xl' : 'bg-white text-slate-800 rounded-r-2xl rounded-tl-2xl'} p-3 shadow-sm border ${isMe ? 'border-teal-700' : 'border-slate-100'} relative">
-                        ${!isMe ? `<p class="text-[9px] font-black uppercase mb-1 ${isMe ? 'text-teal-200' : 'text-teal-600'}">${m.name}</p>` : ''}
-                        <div class="text-[11px] font-medium leading-relaxed whitespace-pre-wrap ${isReport ? 'bg-slate-50/10 p-2 rounded-lg border border-white/10' : ''}">${m.message}</div>
-                        <div class="flex items-center justify-end mt-1 gap-1">
-                            <p class="text-[8px] opacity-60 font-bold uppercase tracking-tighter">${m.time}</p>
-                            ${checkmark}
+                <div class="flex ${isMe ? 'justify-end' : 'justify-start'} mb-4">
+                    <div class="flex flex-col ${isMe ? 'items-end' : 'items-start'} max-w-[85%]">
+                        <div onclick="window.toggleChatControls('${m.msgId}')" class="chat-bubble ${isMe ? 'bg-teal-600 text-white rounded-l-2xl rounded-tr-2xl' : 'bg-white text-slate-800 rounded-r-2xl rounded-tl-2xl'} p-3 shadow-sm border ${isMe ? 'border-teal-700' : 'border-slate-100'} relative">
+                            ${!isMe ? `<p class="text-[9px] font-black uppercase mb-1 ${isMe ? 'text-teal-200' : 'text-teal-600'}">${m.name}</p>` : ''}
+                            <div class="text-[11px] font-medium leading-relaxed whitespace-pre-wrap ${isReport ? 'bg-slate-50/10 p-2 rounded-lg border border-white/10' : ''}">${m.message}</div>
+                            <div class="flex items-center justify-end mt-1 gap-1">
+                                <p class="text-[8px] opacity-60 font-bold uppercase tracking-tighter">${m.time}</p>
+                                ${checkmark}
+                            </div>
                         </div>
+                        ${isMe && status !== 'sending' && showControls ? `
+                            <div class="flex gap-3 mt-1.5 px-2 animate-fadeIn">
+                                <button onclick="window.triggerEditInline('${m.msgId}', \`${m.message.replace(/`/g, '\\`').replace(/'/g, "\\'")}\`)" class="chat-control-text text-teal-600">Edit</button>
+                                <button onclick="window.deleteChat('${m.msgId}')" class="chat-control-text text-rose-500">Hapus</button>
+                            </div>
+                        ` : ''}
                     </div>
-                    ${isMe && status !== 'sending' ? `
-                        <div class="absolute -top-2 ${isMe ? '-left-8' : '-right-8'} flex flex-col gap-1 chat-options-btn">
-                            <button onclick="window.openEditChat('${m.msgId}', \`${m.message.replace(/`/g, '\\`').replace(/'/g, "\\'")}\`)" class="w-6 h-6 bg-white border border-slate-200 rounded-full text-[10px] shadow-sm flex items-center justify-center">✏️</button>
-                            <button onclick="window.deleteChat('${m.msgId}')" class="w-6 h-6 bg-rose-50 border border-rose-200 rounded-full text-[10px] shadow-sm flex items-center justify-center">🗑️</button>
-                        </div>
-                    ` : ''}
                 </div>
             `;
         }).join('');
         
         setTimeout(() => { container.scrollTop = container.scrollHeight; }, 100);
+    };
+
+    window.toggleChatControls = (msgId) => {
+        db.selectedMsgId = (db.selectedMsgId === msgId) ? null : msgId;
+        window.renderChat();
+    };
+
+    window.triggerEditInline = (id, msg) => {
+        db.activeEditChat = { id, msg };
+        document.getElementById('edit-chat-input').value = msg;
+        document.getElementById('modal-edit-chat').style.display = 'flex';
     };
 
     window.render = function() {
@@ -735,26 +777,22 @@
         let schH = '<table class="schedule-table"><tbody>';
         ['Pagi','Siang','Malam'].forEach(sName => {
             let targetDate = now.getDate();
-            
             if (sName === 'Malam') {
                 const shPagi = db.config.shiftHours.Pagi;
                 const parse = (t) => { const p = t.split(':'); return parseInt(p[0])*60 + parseInt(p[1]); };
                 const currentTimeMinutes = now.getHours() * 60 + now.getMinutes();
-                
                 if (currentTimeMinutes < parse(shPagi.start)) {
                     let dYesterday = new Date();
                     dYesterday.setDate(now.getDate() - 1);
                     targetDate = dYesterday.getDate();
                 }
             }
-
             const assigned = db.officers.filter(n => db.schedule[n] && db.schedule[n][targetDate] === sName[0]);
             const isCur = sName.toLowerCase() === sh.l.toLowerCase();
             schH += `<tr><td class="${isCur ? 'current-shift-card' : ''}"><div class="font-black text-slate-700 text-xs">${sName}</div></td><td class="${isCur ? 'current-shift-card' : ''}">${assigned.length ? assigned.map(o => `<span class="staff-pill ${isCur ? 'staff-pill-active' : ''}">${o}</span>`).join('') : '<span class="text-slate-300 italic text-[10px]">Kosong</span>'}</td></tr>`;
         });
         safeSetHTML('planned-schedule-list', schH + '</tbody></table>');
 
-        // LOGIKA STATUS KEHADIRAN (LIVE)
         let actLogs;
         if (sh.l === 'Malam') {
             const yd = new Date(); yd.setDate(yd.getDate() - 1);
@@ -763,7 +801,6 @@
         } else {
             actLogs = db.logs.filter(l => l.date === today && l.shift === sh.l);
         }
-
         safeSetHTML('current-duty-list', actLogs.length ? actLogs.map(l => `<div class="bg-white p-3 rounded-2xl flex items-center gap-3 border border-emerald-100"><div class="w-8 h-8 rounded-lg bg-emerald-500 text-white flex items-center justify-center font-black text-xs">${l.name[0]}</div><div><p class="text-[10px] font-black uppercase text-slate-700">${l.name}</p><p class="text-[7px] font-bold text-emerald-500 uppercase">SHIFT ${l.shift.toUpperCase()} • SEDANG JAGA</p></div></div>`).join('') : '<p class="text-center py-4 text-[10px] font-bold text-slate-300 uppercase">Belum ada absen masuk</p>');
         
         const dailyLogs = db.logs.filter(l => l.date === today);
@@ -796,7 +833,23 @@
     };
     window.logoutChat = () => { db.isChatAuth=false; localStorage.removeItem('is_chat_auth'); window.render(); };
 
-    window.showView = function(v) { document.querySelectorAll('.view-content').forEach(el => el.classList.remove('active')); document.getElementById('view-'+v).classList.add('active'); document.querySelectorAll('.nav-card-item').forEach(el => el.classList.remove('active')); document.getElementById('nav-'+v)?.classList.add('active'); if(v === 'rekap' || v === 'chat') window.loadData('background'); };
+    window.showView = function(v) { 
+        db.activeView = v;
+        document.querySelectorAll('.view-content').forEach(el => el.classList.remove('active')); 
+        document.getElementById('view-'+v).classList.add('active'); 
+        document.querySelectorAll('.nav-card-item').forEach(el => el.classList.remove('active')); 
+        document.getElementById('nav-'+v)?.classList.add('active'); 
+        if(v === 'chat') {
+            document.getElementById('chat-badge').classList.add('hidden');
+            if(db.chat.length > 0) {
+                const maxId = db.chat.reduce((max, c) => Math.max(max, parseInt(c.msgId || 0)), 0);
+                db.lastChatId = maxId.toString();
+                localStorage.setItem('last_chat_id', db.lastChatId);
+            }
+        }
+        if(v === 'rekap' || v === 'chat') window.loadData('background'); 
+    };
+    
     window.togglePanel = (id) => { document.getElementById(id).classList.toggle('open'); };
     window.togglePlannedSchedule = () => { document.getElementById('planned-schedule-container').classList.toggle('open'); };
     window.updateLocalSch = (n, d, v, cell) => { if(!db.schedule[n]) db.schedule[n] = {}; db.schedule[n][d] = v; cell.className = v ? 'cell-'+v : ''; };
@@ -833,44 +886,21 @@
                 if(txt === db.config.qrData) {
                     let shiftInfo = getShiftData();
                     let targetDate = new Date();
-                    
                     if (shiftInfo.l === 'Malam') {
                         const now = new Date();
                         const currentTimeMinutes = now.getHours() * 60 + now.getMinutes();
                         const pagiStart = db.config.shiftHours.Pagi.start.split(':');
                         const pagiStartMinutes = parseInt(pagiStart[0]) * 60 + parseInt(pagiStart[1]);
-
-                        if (currentTimeMinutes < pagiStartMinutes) {
-                            targetDate.setDate(targetDate.getDate() - 1);
-                        }
+                        if (currentTimeMinutes < pagiStartMinutes) targetDate.setDate(targetDate.getDate() - 1);
                     }
-                    
                     const presensiDateStr = ("0"+targetDate.getDate()).slice(-2)+"/"+("0"+(targetDate.getMonth()+1)).slice(-2)+"/"+targetDate.getFullYear();
-
-                    const isAlreadyScanned = db.logs.some(log => 
-                        log.name === db.activeUser && 
-                        log.date === presensiDateStr && 
-                        log.shift === shiftInfo.l
-                    );
-
-                    if (isAlreadyScanned) {
-                        await h5q.stop();
-                        modal.style.display = 'none';
-                        showModernNotify('error', 'Gagal', 'Anda sudah melakukan presensi di shift ini.');
-                        return;
-                    }
-
+                    const isAlreadyScanned = db.logs.some(log => log.name === db.activeUser && log.date === presensiDateStr && log.shift === shiftInfo.l);
+                    if (isAlreadyScanned) { await h5q.stop(); modal.style.display = 'none'; showModernNotify('error', 'Gagal', 'Anda sudah melakukan presensi di shift ini.'); return; }
                     anim.style.display = 'flex';
                     if (db.config.voice && 'speechSynthesis' in window) { window.speechSynthesis.speak(new SpeechSynthesisUtterance("Berhasil")); }
-
                     setTimeout(async () => {
                         await h5q.stop(); modal.style.display = 'none';
-                        await postToCloud('saveScan', { 
-                            name: db.activeUser, 
-                            date: presensiDateStr, 
-                            shift: shiftInfo.l, 
-                            time: new Date().toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'}) 
-                        });
+                        await postToCloud('saveScan', { name: db.activeUser, date: presensiDateStr, shift: shiftInfo.l, time: new Date().toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'}) });
                         showModernNotify('success', 'Berhasil', 'Scan tercatat di tanggal ' + presensiDateStr);
                     }, 1200);
                 }
@@ -885,7 +915,6 @@
     window.openPatientModal = () => { document.getElementById('modal-patient').style.display = 'flex'; };
     window.closePatientModal = () => { document.getElementById('modal-patient').style.display = 'none'; };
     
-    // CHAT LOGIC REFINED
     window.sendPatientStatus = async () => { 
         const n = document.getElementById('pst-nama').value; 
         const c = document.getElementById('pst-kondisi').value;
@@ -905,42 +934,26 @@
         await window.sendMessageOptimistic(msg);
     };
 
-    // Optimistic Update: Centang satu langsung tampil
     window.sendMessageOptimistic = async (msg) => {
         const tempId = 'temp-' + Date.now();
         const time = new Date().toLocaleTimeString('id-ID', {hour:'2-digit', minute:'2-digit'});
-        
-        // Pushing locally with 'sending' status
         db.chat.push({ msgId: tempId, name: db.activeUser, message: msg, time: time, status: 'sending' });
         window.renderChat();
-        
-        const success = await postToCloud('saveChat', { 
-            name: db.activeUser, 
-            message: msg, 
-            time: time 
-        });
-
-        if(success) {
-            // Success will trigger loadData in postToCloud, centang dua will appear via re-render
-        } else {
+        const success = await postToCloud('saveChat', { name: db.activeUser, message: msg, time: time });
+        if(!success) {
             showModernNotify('error', 'Gagal', 'Pesan gagal terkirim.');
             db.chat = db.chat.filter(m => m.msgId !== tempId);
             window.renderChat();
         }
     }
 
-    // EDIT/DELETE CHAT
-    window.openEditChat = (id, msg) => {
-        db.activeEditChat = { id, msg };
-        document.getElementById('edit-chat-input').value = msg;
-        document.getElementById('modal-edit-chat').style.display = 'flex';
-    };
     window.closeEditChatModal = () => { document.getElementById('modal-edit-chat').style.display = 'none'; };
     window.saveEditChat = async () => {
         const newMsg = document.getElementById('edit-chat-input').value;
         if(!newMsg.trim()) return;
         const id = db.activeEditChat.id;
         window.closeEditChatModal();
+        db.selectedMsgId = null; // Hide controls after save
         showLoading(true);
         await postToCloud('editChat', { msgId: id, message: newMsg });
         showModernNotify('success', 'Berhasil', 'Pesan diperbarui.');
@@ -948,6 +961,7 @@
     window.deleteChat = async (id) => {
         if(confirm("Hapus pesan ini?")) {
             showLoading(true);
+            db.selectedMsgId = null;
             await postToCloud('deleteChat', { msgId: id });
             showModernNotify('success', 'Terhapus', 'Pesan telah dihapus.');
         }
@@ -972,6 +986,29 @@
         try {
             const r = await fetchWithRetry(WEB_APP_URL + "?action=getData", { method: "GET" });
             const d = await r.json();
+            
+            if(d.chat && d.chat.length > 0) {
+                const latestMsg = d.chat[d.chat.length - 1];
+                const latestId = parseInt(latestMsg.msgId || 0);
+                const lastSeenId = parseInt(db.lastChatId || 0);
+                if (latestId > lastSeenId) {
+                    db.chat = d.chat;
+                    if (latestMsg.name !== db.activeUser) {
+                        if (db.activeView !== 'chat') {
+                            document.getElementById('chat-badge').classList.remove('hidden');
+                            showModernNotify('info', 'Pesan Baru', `${latestMsg.name}: ${latestMsg.message.substring(0, 30)}...`);
+                            if (db.config.voice && 'speechSynthesis' in window) { window.speechSynthesis.speak(new SpeechSynthesisUtterance("Pesan chat baru")); }
+                        } else {
+                            db.lastChatId = latestId.toString();
+                            localStorage.setItem('last_chat_id', db.lastChatId);
+                        }
+                    } else {
+                        db.lastChatId = latestId.toString();
+                        localStorage.setItem('last_chat_id', db.lastChatId);
+                    }
+                }
+            }
+
             db.officers = d.officers || []; 
             db.logs = d.logs || []; 
             db.schedule = d.schedule || {}; 
@@ -992,7 +1029,6 @@
             if(db.isSettingsAuth) window.fillConfigInputs();
         } catch(e) { 
             console.error("Kesalahan pengambilan data:", e);
-            showModernNotify('error', 'Koneksi Terhambat', 'Gagal memuat data dari server.');
         } finally { showLoading(false); }
     };
 
@@ -1014,10 +1050,7 @@
 
     async function postToCloud(action, payload) {
         try { 
-            const r = await fetchWithRetry(WEB_APP_URL, { 
-                method: "POST", 
-                body: JSON.stringify({ action, payload })
-            }); 
+            const r = await fetchWithRetry(WEB_APP_URL, { method: "POST", body: JSON.stringify({ action, payload }) }); 
             const res = await r.json(); 
             if(res.status === 'success') await window.loadData('background'); 
             return res.status === 'success'; 
@@ -1031,6 +1064,7 @@
     window.onload = () => {
         updateOnlineStatus(); window.addEventListener('online', updateOnlineStatus); window.addEventListener('offline', updateOnlineStatus);
         window.loadData();
+        setInterval(() => { window.loadData('background'); }, 40000);
         setInterval(() => { safeSetText('clock', new Date().toLocaleTimeString('id-ID', { hour:'2-digit', minute:'2-digit' })); }, 30000);
     };
 </script>
