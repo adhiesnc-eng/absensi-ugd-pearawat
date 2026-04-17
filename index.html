@@ -81,7 +81,6 @@
             border-right: 2px solid #f1f5f9 !important; font-weight: 700; color: #1e293b;
         }
 
-        /* KOLOM STICKY KANAN UNTUK TOTAL */
         .sticky-col-right {
             position: sticky; right: 0; background: white !important; z-index: 10;
             border-left: 2px solid #f1f5f9 !important;
@@ -192,7 +191,6 @@
         .chat-scroll { scrollbar-width: none; -ms-overflow-style: none; }
         .chat-scroll::-webkit-scrollbar { display: none; }
 
-        /* ANIMASI BARU UNTUK PENANDA */
         @keyframes pulse-ring {
             0% { transform: scale(0.33); }
             80%, 100% { opacity: 0; }
@@ -617,7 +615,6 @@
         const now = new Date(), yr = now.getFullYear(), mo = now.getMonth(), days = new Date(yr, mo+1, 0).getDate();
         let h = `<table class="editor-table"><thead><tr><th class="sticky-col">PERAWAT</th>`;
         for(let d=1; d<=days; d++) h += `<th class="${new Date(yr, mo, d).getDay() === 0 ? 'text-sunday' : ''}">${d}</th>`;
-        // TERAPKAN STICKY COL RIGHT PADA HEADER
         h += `<th class="sticky-col-right text-white" style="background-color: var(--primary) !important;">TOT</th></tr></thead><tbody>`;
         db.officers.forEach(name => {
             const key = name.trim().toUpperCase(), att = db.attendance[key] || {};
@@ -626,7 +623,6 @@
                 const val = att[d] || '', click = db.isSettingsAuth ? `onclick="window.editRekapCell('${name}', ${d})"` : '';
                 h += `<td class="cell-${val} font-bold rekap-cell-editable" ${click}>${val}</td>`;
             }
-            // TERAPKAN STICKY COL RIGHT PADA ISI SEL
             h += `<td class="sticky-col-right font-black" style="color: var(--primary); background-color: white !important;">${Object.keys(att).length}</td></tr>`;
         });
         safeSetHTML('rekap-table-container', h + `</tbody></table>`);
@@ -751,10 +747,35 @@
                 if(txt === db.config.qrData) {
                     anim.style.display = 'flex';
                     if (db.config.voice && 'speechSynthesis' in window) { window.speechSynthesis.speak(new SpeechSynthesisUtterance("Berhasil")); }
+                    
+                    // LOGIKA TANGGAL PRESENSI KHUSUS SHIFT MALAM
+                    let shiftInfo = getShiftData();
+                    let targetDate = new Date();
+                    
+                    // Jika sekarang jam shift Malam dan waktu sudah masuk dini hari (sebelum Pagi mulai)
+                    if (shiftInfo.l === 'Malam') {
+                        const now = new Date();
+                        const currentTimeMinutes = now.getHours() * 60 + now.getMinutes();
+                        const pagiStart = db.config.shiftHours.Pagi.start.split(':');
+                        const pagiStartMinutes = parseInt(pagiStart[0]) * 60 + parseInt(pagiStart[1]);
+
+                        if (currentTimeMinutes < pagiStartMinutes) {
+                            // Pindahkan tanggal ke hari kemarin agar masuk ke jadwal yang benar
+                            targetDate.setDate(targetDate.getDate() - 1);
+                        }
+                    }
+                    
+                    const presensiDateStr = ("0"+targetDate.getDate()).slice(-2)+"/"+("0"+(targetDate.getMonth()+1)).slice(-2)+"/"+targetDate.getFullYear();
+
                     setTimeout(async () => {
                         await h5q.stop(); modal.style.display = 'none';
-                        await postToCloud('saveScan', { name: db.activeUser, date: getTodayStr(), shift: getShiftData().l, time: new Date().toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'}) });
-                        showModernNotify('success', 'Berhasil', 'Scan tercatat.');
+                        await postToCloud('saveScan', { 
+                            name: db.activeUser, 
+                            date: presensiDateStr, 
+                            shift: shiftInfo.l, 
+                            time: new Date().toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'}) 
+                        });
+                        showModernNotify('success', 'Berhasil', 'Scan tercatat di tanggal ' + presensiDateStr);
                     }, 1200);
                 }
             });
