@@ -213,13 +213,25 @@
             background-color: var(--accent); border-radius: 50%;
             animation: pulse-dot 1.25s cubic-bezier(0.455, 0.03, 0.515, 0.955) -.4s infinite;
         }
+
+        /* FAB RELOAD */
+        .fab-reload {
+            position: fixed; bottom: 200px; right: 16px;
+            width: 48px; height: 48px; background: white;
+            border-radius: 16px; border: 1px solid #f1f5f9;
+            box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1);
+            display: flex; items-center; justify-content: center;
+            z-index: 150; transition: 0.3s; color: #64748b;
+        }
+        .fab-reload:active { transform: scale(0.9) rotate(45deg); }
     </style>
 </head>
 <body class="nav-layout-grid" id="body-main">
 
-<div id="loading" class="hidden fixed inset-0 bg-white/80 backdrop-blur-sm z-[2000] flex flex-col items-center justify-center">
-    <div class="w-12 h-12 border-4 border-teal-600 border-t-transparent rounded-full animate-spin mb-4" style="border-top-color: var(--primary)"></div>
-    <p class="font-bold text-teal-700 text-xs uppercase tracking-widest text-center" style="color: var(--primary)">Memproses...</p>
+<!-- LOADING INDIKATOR LATAR BELAKANG (NON-BLOCKING) -->
+<div id="loading" class="hidden fixed top-6 left-1/2 -translate-x-1/2 bg-white/95 backdrop-blur-md px-4 py-2.5 rounded-2xl shadow-2xl z-[2000] flex items-center gap-3 border border-slate-100 ring-4 ring-black/5 animate-bounce">
+    <div class="w-4 h-4 border-2 border-teal-600 border-t-transparent rounded-full animate-spin" style="border-top-color: var(--primary)"></div>
+    <p class="font-extrabold text-slate-700 text-[10px] uppercase tracking-widest whitespace-nowrap">Sinkronisasi Data...</p>
 </div>
 
 <!-- NOTIFICATION TOAST -->
@@ -232,6 +244,11 @@
 </div>
 
 <div class="app-container">
+    <!-- TOMBOL RELOAD MELAYANG -->
+    <button onclick="window.loadData()" class="fab-reload" title="Refresh Data">
+        <span class="text-xl">🔄</span>
+    </button>
+
     <div id="connection-status" class="status-online">Terhubung</div>
 
     <div class="scrollable-content" id="main-scroll">
@@ -529,7 +546,12 @@
     function safeSetHTML(id, html) { const el = document.getElementById(id); if(el) el.innerHTML = html; }
     function safeSetValue(id, val) { const el = document.getElementById(id); if(el) el.value = val; }
     function safeSetChecked(id, val) { const el = document.getElementById(id); if(el) el.checked = !!val; }
-    function showLoading(s) { var l = document.getElementById('loading'); if(l) s ? l.classList.remove('hidden') : l.classList.add('hidden'); }
+    
+    // showLoading versi baru: melayang di atas, tidak memblokir UI
+    function showLoading(s) { 
+        var l = document.getElementById('loading'); 
+        if(l) s ? l.classList.remove('hidden') : l.classList.add('hidden'); 
+    }
     
     async function fetchWithRetry(url, options = {}, retries = 5, backoff = 1000) {
         const fetchOptions = { ...options, mode: 'cors', redirect: 'follow', cache: 'no-cache' };
@@ -745,7 +767,6 @@
             if(!h5q) h5q = new Html5Qrcode("reader");
             await h5q.start({ facingMode: "environment" }, { fps: 15, qrbox: 250 }, async (txt) => {
                 if(txt === db.config.qrData) {
-                    // LOGIKA TANGGAL PRESENSI DAN VALIDASI DUPLIKAT
                     let shiftInfo = getShiftData();
                     let targetDate = new Date();
                     
@@ -762,7 +783,6 @@
                     
                     const presensiDateStr = ("0"+targetDate.getDate()).slice(-2)+"/"+("0"+(targetDate.getMonth()+1)).slice(-2)+"/"+targetDate.getFullYear();
 
-                    // VALIDASI: CEK APAKAH SUDAH SCAN DI SHIFT INI
                     const isAlreadyScanned = db.logs.some(log => 
                         log.name === db.activeUser && 
                         log.date === presensiDateStr && 
@@ -776,7 +796,6 @@
                         return;
                     }
 
-                    // Jika belum absen, lanjutkan proses
                     anim.style.display = 'flex';
                     if (db.config.voice && 'speechSynthesis' in window) { window.speechSynthesis.speak(new SpeechSynthesisUtterance("Berhasil")); }
 
