@@ -793,14 +793,28 @@
         });
         safeSetHTML('planned-schedule-list', schH + '</tbody></table>');
 
+        // LOGIKA BARU: Filter Log Khusus untuk Shift Aktif (Menghindari Double Tampilan Malam)
         let actLogs;
         if (sh.l === 'Malam') {
-            const yd = new Date(); yd.setDate(yd.getDate() - 1);
-            const yesterday = ("0"+yd.getDate()).slice(-2)+"/"+("0"+(yd.getMonth()+1)).slice(-2)+"/"+yd.getFullYear();
-            actLogs = db.logs.filter(l => (l.date === today || l.date === yesterday) && l.shift === 'Malam');
+            const curTime = now.getHours() * 60 + now.getMinutes();
+            const parse = (t) => { if(!t) return 0; const p = String(t).split(':'); return parseInt(p[0])*60 + (p[1]?parseInt(p[1]):0); };
+            const morningStart = parse(db.config.shiftHours.Pagi.start);
+            
+            let targetDateStr;
+            // Jika jam sekarang masih pagi buta (sebelum shift pagi mulai), berarti petugas yang tampil adalah yang login kemarin malam
+            if (curTime < morningStart) {
+                const yd = new Date(); yd.setDate(yd.getDate() - 1);
+                targetDateStr = ("0"+yd.getDate()).slice(-2)+"/"+("0"+(yd.getMonth()+1)).slice(-2)+"/"+yd.getFullYear();
+            } else {
+                // Jika sudah malam hari, berarti petugas yang tampil adalah yang login hari ini
+                targetDateStr = today;
+            }
+            actLogs = db.logs.filter(l => l.date === targetDateStr && l.shift === 'Malam');
         } else {
+            // Shift Pagi dan Siang hanya melihat log hari ini
             actLogs = db.logs.filter(l => l.date === today && l.shift === sh.l);
         }
+
         safeSetHTML('current-duty-list', actLogs.length ? actLogs.map(l => `<div class="bg-white p-3 rounded-2xl flex items-center gap-3 border border-emerald-100"><div class="w-8 h-8 rounded-lg bg-emerald-500 text-white flex items-center justify-center font-black text-xs">${l.name[0]}</div><div><p class="text-[10px] font-black uppercase text-slate-700">${l.name}</p><p class="text-[7px] font-bold text-emerald-500 uppercase">SHIFT ${l.shift.toUpperCase()} • SEDANG JAGA</p></div></div>`).join('') : '<p class="text-center py-4 text-[10px] font-bold text-slate-300 uppercase">Belum ada absen masuk</p>');
         
         const dailyLogs = db.logs.filter(l => l.date === today);
